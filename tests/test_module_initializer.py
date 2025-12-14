@@ -14,11 +14,13 @@ class ModuleInitializerTestCase(unittest.TestCase):
             records=(
                 _spec.Struct(
                     id="my/module.skir:Point",
+                    doc="A 2D point.",
                     fields=(
                         _spec.Field(
                             name="x",
                             number=0,
                             type=_spec.PrimitiveType.FLOAT32,
+                            doc="X coordinate.",
                         ),
                         _spec.Field(
                             name="y",
@@ -126,16 +128,16 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 ),
                 _spec.Enum(
                     id="my/module.skir:PrimaryColor",
-                    constant_fields=(
-                        _spec.ConstantField(
+                    constant_variants=(
+                        _spec.ConstantVariant(
                             name="RED",
                             number=10,
                         ),
-                        _spec.ConstantField(
+                        _spec.ConstantVariant(
                             name="GREEN",
                             number=20,
                         ),
-                        _spec.ConstantField(
+                        _spec.ConstantVariant(
                             name="BLUE",
                             number=30,
                         ),
@@ -143,14 +145,14 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 ),
                 _spec.Enum(
                     id="my/module.skir:Status",
-                    constant_fields=(
-                        _spec.ConstantField(
+                    constant_variants=(
+                        _spec.ConstantVariant(
                             name="OK",
                             number=1,
                         ),
                     ),
-                    wrapper_fields=(
-                        _spec.WrapperField(
+                    wrapper_variants=(
+                        _spec.WrapperVariant(
                             name="error",
                             number=2,
                             type=_spec.PrimitiveType.STRING,
@@ -160,34 +162,36 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 ),
                 _spec.Enum(
                     id="my/module.skir:JsonValue",
-                    constant_fields=(
-                        _spec.ConstantField(
+                    doc="A JSON value.",
+                    constant_variants=(
+                        _spec.ConstantVariant(
                             name="NULL",
                             number=1,
                         ),
                     ),
-                    wrapper_fields=(
-                        _spec.WrapperField(
+                    wrapper_variants=(
+                        _spec.WrapperVariant(
                             name="bool",
                             number=2,
                             type=_spec.PrimitiveType.BOOL,
+                            doc="A boolean value.",
                         ),
-                        _spec.WrapperField(
+                        _spec.WrapperVariant(
                             name="number",
                             number=3,
                             type=_spec.PrimitiveType.FLOAT64,
                         ),
-                        _spec.WrapperField(
+                        _spec.WrapperVariant(
                             name="string",
                             number=4,
                             type=_spec.PrimitiveType.STRING,
                         ),
-                        _spec.WrapperField(
+                        _spec.WrapperVariant(
                             name="array",
                             number=5,
                             type=_spec.ArrayType("my/module.skir:JsonValue"),
                         ),
-                        _spec.WrapperField(
+                        _spec.WrapperVariant(
                             name="object",
                             number=6,
                             type="my/module.skir:JsonValue.Object",
@@ -335,6 +339,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     number=-300,
                     request_type="my/module.skir:Point",
                     response_type="my/module.skir:Shape",
+                    doc="First method",
                 ),
                 _spec.Method(
                     name="SecondMethod",
@@ -530,10 +535,10 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIsInstance(point.x, float)
         self.assertEqual(point._array_len, 3)
 
-    def test_point_with_keep_unrecognized_fields(self):
+    def test_point_with_keep_unrecognized_values(self):
         point_cls = self.init_test_module()["Point"]
         serializer = point_cls.serializer
-        point = serializer.from_json([1.5, 1, 2.5, True], keep_unrecognized_fields=True)
+        point = serializer.from_json([1.5, 1, 2.5, True], keep_unrecognized_values=True)
         self.assertEqual(point, point_cls(x=1.5, y=2.5))
         self.assertEqual(serializer.to_json(point), [1.5, 0, 2.5, True])
         point = point.to_mutable().to_frozen()
@@ -875,24 +880,24 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(json_object_entry_cls.DEFAULT.value, json_value_cls.UNKNOWN)
         self.assertEqual(json_object_entry_cls.partial().value, json_value_cls.UNKNOWN)
 
-    def test_enum_with_keep_unrecognized_fields(self):
+    def test_enum_with_keep_unrecognized_values(self):
         json_value_cls = self.init_test_module()["JsonValue"]
         serializer = json_value_cls.serializer
-        json_value = serializer.from_json(100, keep_unrecognized_fields=True)  # removed
+        json_value = serializer.from_json(100, keep_unrecognized_values=True)  # removed
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
         self.assertEqual(serializer.to_json(json_value), 0)
         json_value = serializer.from_json(
-            [101, True], keep_unrecognized_fields=True
+            [101, True], keep_unrecognized_values=True
         )  # removed
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
         self.assertEqual(serializer.to_json(json_value), 0)
         json_value = serializer.from_json(
-            102, keep_unrecognized_fields=True
+            102, keep_unrecognized_values=True
         )  # unrecognized
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
         self.assertEqual(serializer.to_json(json_value), 102)
         json_value = serializer.from_json(
-            [102, True], keep_unrecognized_fields=True
+            [102, True], keep_unrecognized_values=True
         )  # unrecognized
         self.assertEqual(json_value, json_value_cls.UNKNOWN)
         self.assertEqual(serializer.to_json(json_value), [102, True])
@@ -1224,6 +1229,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 number=-300,
                 request_serializer=module["Point"].serializer,
                 response_serializer=module["Shape"].serializer,
+                doc="First method",
             ),
         )
         second_method = module["MethodVar"]
@@ -1234,6 +1240,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 number=-301,
                 request_serializer=module["Point"].serializer,
                 response_serializer=module["Shape"].serializer,
+                doc="",
             ),
         )
 
@@ -1255,7 +1262,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     {
                         "kind": "enum",
                         "id": "my/module.skir:JsonValue",
-                        "fields": [
+                        "doc": "A JSON value.",
+                        "variants": [
                             {
                                 "name": "NULL",
                                 "number": 1,
@@ -1264,6 +1272,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                                 "name": "bool",
                                 "type": {"kind": "primitive", "value": "bool"},
                                 "number": 2,
+                                "doc": "A boolean value.",
                             },
                             {
                                 "name": "number",
@@ -1395,11 +1404,13 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     {
                         "kind": "struct",
                         "id": "my/module.skir:Point",
+                        "doc": "A 2D point.",
                         "fields": [
                             {
                                 "name": "x",
                                 "type": {"kind": "primitive", "value": "float32"},
                                 "number": 0,
+                                "doc": "X coordinate.",
                             },
                             {
                                 "name": "y",
@@ -1814,18 +1825,18 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(restored_empty.y, 0.0)
 
     def test_struct_binary_with_drop_unrecognized_fields(self):
-        """Test that keep_unrecognized_fields=False (default) drops unrecognized fields in binary format."""
+        """Test that keep_unrecognized_values=False (default) drops unrecognized fields in binary format."""
         module = self.init_test_module()
         Point = module["Point"]
 
         # Create a point with unrecognized fields via JSON
         point_from_json = Point.serializer.from_json(
-            [1.5, 0, 2.5, 100], keep_unrecognized_fields=True
+            [1.5, 0, 2.5, 100], keep_unrecognized_values=True
         )
         # This point has unrecognized field at index 3
         self.assertEqual(Point.serializer.to_json(point_from_json), [1.5, 0, 2.5, 100])
 
-        # Now convert to binary and back WITHOUT keep_unrecognized_fields
+        # Now convert to binary and back WITHOUT keep_unrecognized_values
         binary_bytes = Point.serializer.to_bytes(point_from_json)
         restored_drop = Point.serializer.from_bytes(binary_bytes)  # default is False
 
@@ -1840,17 +1851,17 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(Point.serializer.to_json(mutable), [1.5, 0, 2.5])
 
     def test_struct_binary_format_with_removed_fields_drop_unrecognized(self):
-        """Test binary format drops removed field data when keep_unrecognized_fields=False."""
+        """Test binary format drops removed field data when keep_unrecognized_values=False."""
         module = self.init_test_module()
         Foobar = module["Foobar"]
 
         # Foobar has removed_numbers=(0, 2)
         # Create from JSON with data in removed field positions
         foobar_from_json = Foobar.serializer.from_json(
-            [5, 10, 15, 20, [1.0]], keep_unrecognized_fields=True
+            [5, 10, 15, 20, [1.0]], keep_unrecognized_values=True
         )
 
-        # Convert to binary and back WITHOUT keep_unrecognized_fields
+        # Convert to binary and back WITHOUT keep_unrecognized_values
         binary_bytes = Foobar.serializer.to_bytes(foobar_from_json)
         restored = Foobar.serializer.from_bytes(binary_bytes)  # default drops
 

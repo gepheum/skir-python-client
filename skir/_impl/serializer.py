@@ -61,23 +61,23 @@ class Serializer(Generic[T]):
         else:
             return jsonlib.dumps(self._to_dense_json_fn(input), separators=(",", ":"))
 
-    def from_json(self, json: Any, keep_unrecognized_fields: bool = False) -> T:
-        return self._from_json_fn(json, keep_unrecognized_fields)
+    def from_json(self, json: Any, keep_unrecognized_values: bool = False) -> T:
+        return self._from_json_fn(json, keep_unrecognized_values)
 
     def from_json_code(
-        self, json_code: str, keep_unrecognized_fields: bool = False
+        self, json_code: str, keep_unrecognized_values: bool = False
     ) -> T:
-        return self._from_json_fn(jsonlib.loads(json_code), keep_unrecognized_fields)
+        return self._from_json_fn(jsonlib.loads(json_code), keep_unrecognized_values)
 
     def to_bytes(self, input: T) -> bytes:
         buffer = bytearray(b"skir")
         self._encode_fn(input, buffer)
         return bytes(buffer)
 
-    def from_bytes(self, bytes: bytes, keep_unrecognized_fields: bool = False) -> T:
+    def from_bytes(self, bytes: bytes, keep_unrecognized_values: bool = False) -> T:
         if bytes.startswith(b"skir"):
             stream = ByteStream(
-                bytes, position=4, keep_unrecognized_fields=keep_unrecognized_fields
+                bytes, position=4, keep_unrecognized_values=keep_unrecognized_values
             )
             return self._decode_fn(stream)
         return self.from_json_code(bytes.decode("utf-8"))
@@ -129,10 +129,10 @@ def _make_to_json_fn(adapter: TypeAdapter[T], readable: bool) -> Callable[[T], A
 def _make_from_json_fn(adapter: TypeAdapter[T]) -> Callable[[Any, bool], T]:
     return make_function(
         name="from_json",
-        params=["json", "keep_unrecognized_fields"],
+        params=["json", "keep_unrecognized_values"],
         body=[
             LineSpan.join(
-                "return ", adapter.from_json_expr("json", "keep_unrecognized_fields")
+                "return ", adapter.from_json_expr("json", "keep_unrecognized_values")
             ),
         ],
     )

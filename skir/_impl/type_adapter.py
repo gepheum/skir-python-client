@@ -10,11 +10,11 @@ T = TypeVar("T")
 
 @dataclass(frozen=False)
 class ByteStream:
-    __slots__ = ("buffer", "position", "keep_unrecognized_fields")
+    __slots__ = ("buffer", "position", "keep_unrecognized_values")
 
     buffer: bytes
     position: int
-    keep_unrecognized_fields: bool
+    keep_unrecognized_values: bool
 
     def read_wire(self) -> int:
         wire = self.buffer[self.position]

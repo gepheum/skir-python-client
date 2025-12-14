@@ -83,16 +83,38 @@ Type: TypeAlias = Union[PrimitiveType, OptionalType, ArrayType, RecordType]
 @dataclass(frozen=True)
 class Field:
     name: str
-    type: Optional[Type]
+    type: Type
     number: int
+    doc: str
 
 
 @dataclass(frozen=True)
-class Record:
-    kind: Literal["struct", "enum"]
+class Struct:
+    kind: Literal["struct"]
     id: str
+    doc: str
     fields: tuple[Field, ...]
     removed_numbers: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Variant:
+    name: str
+    type: Optional[Type]
+    number: int
+    doc: str
+
+
+@dataclass(frozen=True)
+class Enum:
+    kind: Literal["enum"]
+    id: str
+    doc: str
+    variants: tuple[Variant, ...]
+    removed_numbers: tuple[int, ...]
+
+
+Record: TypeAlias = Union[Struct, Enum]
 
 
 # ==============================================================================
@@ -320,25 +342,59 @@ _field_serializer: Final = _dataclass_serializer(
             "number",
             _primitive_serializer(int),
         ),
-        _FieldSerializer[Optional[Type]](
+        _FieldSerializer[Type](
             "type",
-            _optional_serializer(_forwarding_serializer(_get_type_serializer)),
-            default=None,
+            _forwarding_serializer(_get_type_serializer),
+        ),
+        _FieldSerializer(
+            "doc",
+            _primitive_serializer(str),
+            default="",
         ),
     ],
 )
 
 
-_record_serializer: Final = _dataclass_serializer(
-    Record,
+_variant_serializer: Final = _dataclass_serializer(
+    Variant,
+    [
+        _FieldSerializer(
+            "name",
+            _primitive_serializer(str),
+        ),
+        _FieldSerializer(
+            "number",
+            _primitive_serializer(int),
+        ),
+        _FieldSerializer[Optional[Type]](
+            "type",
+            _optional_serializer(_forwarding_serializer(_get_type_serializer)),
+            default=None,
+        ),
+        _FieldSerializer(
+            "doc",
+            _primitive_serializer(str),
+            default="",
+        ),
+    ],
+)
+
+
+_struct_serializer: Final = _dataclass_serializer(
+    Struct,
     [
         _FieldSerializer(
             "kind",
-            _literal_union_serializer({"struct", "enum"}),
+            _literal_union_serializer({"struct"}),
         ),
         _FieldSerializer(
             "id",
             _primitive_serializer(str),
+        ),
+        _FieldSerializer(
+            "doc",
+            _primitive_serializer(str),
+            default="",
         ),
         _FieldSerializer(
             "fields",
@@ -350,6 +406,43 @@ _record_serializer: Final = _dataclass_serializer(
             default=(),
         ),
     ],
+)
+
+
+_enum_serializer: Final = _dataclass_serializer(
+    Enum,
+    [
+        _FieldSerializer(
+            "kind",
+            _literal_union_serializer({"enum"}),
+        ),
+        _FieldSerializer(
+            "id",
+            _primitive_serializer(str),
+        ),
+        _FieldSerializer(
+            "doc",
+            _primitive_serializer(str),
+            default="",
+        ),
+        _FieldSerializer(
+            "variants",
+            _listuple_serializer(_variant_serializer),
+        ),
+        _FieldSerializer(
+            "removed_numbers",
+            _listuple_serializer(_primitive_serializer(int)),
+            default=(),
+        ),
+    ],
+)
+
+
+_record_serializer: Final[_Serializer[Type]] = _union_serializer(
+    {
+        "struct": _struct_serializer,
+        "enum": _enum_serializer,
+    }
 )
 
 

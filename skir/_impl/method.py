@@ -15,3 +15,4 @@ class Method(Generic[Request, Response]):
     number: int
     request_serializer: Serializer[Request]
     response_serializer: Serializer[Response]
+    doc: str

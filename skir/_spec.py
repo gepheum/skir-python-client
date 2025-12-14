@@ -64,8 +64,8 @@ class Struct:
 
 
 @dataclass(frozen=True)
-class ConstantField:
-    """Constant field of an enum."""
+class ConstantVariant:
+    """Constant variant of an enum."""
 
     name: str
     number: int
@@ -78,8 +78,8 @@ class ConstantField:
 
 
 @dataclass(frozen=True)
-class WrapperField:
-    """Wrapper field of an enum."""
+class WrapperVariant:
+    """Wrapper variant of an enum."""
 
     name: str
     number: int
@@ -91,8 +91,8 @@ class WrapperField:
 class Enum:
     id: str
     doc: str = ""
-    constant_fields: tuple[ConstantField, ...] = ()
-    wrapper_fields: tuple[WrapperField, ...] = ()
+    constant_variants: tuple[ConstantVariant, ...] = ()
+    wrapper_variants: tuple[WrapperVariant, ...] = ()
     removed_numbers: tuple[int, ...] = ()
     _class_name: str = ""  # If different from the record name
     _class_qualname: str = ""  # If different from the qualified name of the record

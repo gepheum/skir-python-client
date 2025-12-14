@@ -16,7 +16,7 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         "gen_class",
         "private_is_enum_attr",
         "finalization_state",
-        "wrapper_fields",
+        "wrapper_variants",
     )
 
     spec: Final[_spec.Enum]
@@ -24,7 +24,7 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
     private_is_enum_attr: Final[str]
     # 0: has not started; 1: in progress; 2: done
     finalization_state: int
-    wrapper_fields: tuple["_WrapperField", ...]
+    wrapper_variants: tuple["_WrapperVariant", ...]
 
     def __init__(self, spec: _spec.Enum):
         self.finalization_state = 0
@@ -42,10 +42,10 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         setattr(base_class, private_is_enum_attr, True)
 
         # Add the constants.
-        for constant_field in self.all_constant_fields:
-            constant_class = _make_constant_class(base_class, constant_field)
+        for constant_variant in self.all_constant_variants:
+            constant_class = _make_constant_class(base_class, constant_variant)
             constant = constant_class()
-            setattr(base_class, constant_field.attribute, constant)
+            setattr(base_class, constant_variant.attribute, constant)
 
         # Add the Kind type alias.
         setattr(base_class, "Kind", str)
@@ -62,10 +62,10 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
 
         base_class = self.gen_class
 
-        # Resolve the type of every wrapper field.
-        self.wrapper_fields = wrapper_fields = tuple(
-            _make_wrapper_field(f, resolve_type_fn(f.type), base_class)
-            for f in self.spec.wrapper_fields
+        # Resolve the type of every wrapper variant.
+        self.wrapper_variants = wrapper_variants = tuple(
+            _make_wrapper_variant(f, resolve_type_fn(f.type), base_class)
+            for f in self.spec.wrapper_variants
         )
 
         # Aim to have dependencies finalized *before* the dependent. It's not always
@@ -73,32 +73,32 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         # The function returned by the do_x_fn() method of a dependency is marginally
         # faster if the dependency is finalized. If the dependency is not finalized,
         # this function is a "forwarding" function.
-        for wrapper_field in wrapper_fields:
-            wrapper_field.field_type.finalize(resolve_type_fn)
+        for wrapper_variant in wrapper_variants:
+            wrapper_variant.value_type.finalize(resolve_type_fn)
 
         # Add the wrap static factory methods.
-        for wrapper_field in wrapper_fields:
-            wrap_fn = _make_wrap_fn(wrapper_field)
-            setattr(base_class, f"wrap_{wrapper_field.spec.name}", wrap_fn)
-            # Check if the field type is a struct type.
-            field_type = resolve_type_fn(wrapper_field.spec.type)
-            frozen_class = field_type.frozen_class_of_struct()
+        for wrapper_variant in wrapper_variants:
+            wrap_fn = _make_wrap_fn(wrapper_variant)
+            setattr(base_class, f"wrap_{wrapper_variant.spec.name}", wrap_fn)
+            # Check if the value type is a struct type.
+            value_type = resolve_type_fn(wrapper_variant.spec.type)
+            frozen_class = value_type.frozen_class_of_struct()
             if frozen_class:
                 create_fn = _make_create_fn(wrap_fn, frozen_class)
-                setattr(base_class, f"create_{wrapper_field.spec.name}", create_fn)
+                setattr(base_class, f"create_{wrapper_variant.spec.name}", create_fn)
 
         unrecognized_class = _make_unrecognized_class(base_class)
 
         base_class._fj = _make_from_json_fn(
-            self.all_constant_fields,
-            wrapper_fields,
+            self.all_constant_variants,
+            wrapper_variants,
             set(self.spec.removed_numbers),
             base_class=base_class,
             unrecognized_class=unrecognized_class,
         )
         base_class._decode = _make_decode_fn(
-            self.all_constant_fields,
-            wrapper_fields,
+            self.all_constant_variants,
+            wrapper_variants,
             set(self.spec.removed_numbers),
             base_class=base_class,
             unrecognized_class=unrecognized_class,
@@ -108,13 +108,13 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         self.finalization_state = 2
 
     @property
-    def all_constant_fields(self) -> list[_spec.ConstantField]:
-        unknown_field = _spec.ConstantField(
+    def all_constant_variants(self) -> list[_spec.ConstantVariant]:
+        unknown_variant = _spec.ConstantVariant(
             name="?",
             number=0,
             _attribute="UNKNOWN",
         )
-        return list(self.spec.constant_fields) + [unknown_field]
+        return list(self.spec.constant_variants) + [unknown_variant]
 
     def default_expr(self) -> Expr:
         return Expr.local("_d?", self.gen_class.UNKNOWN)
@@ -177,30 +177,33 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
         record_id = self.spec.id
         if record_id in registry:
             return
-        registry[record_id] = reflection.Record(
+        registry[record_id] = reflection.Enum(
             kind="enum",
             id=record_id,
-            fields=tuple(
-                reflection.Field(
-                    name=field.name,
-                    number=field.number,
+            doc=self.spec.doc,
+            variants=tuple(
+                reflection.Variant(
+                    name=variant.name,
+                    number=variant.number,
                     type=None,
+                    doc=variant.doc,
                 )
-                for field in self.all_constant_fields
-                if field.number != 0
+                for variant in self.all_constant_variants
+                if variant.number != 0
             )
             + tuple(
-                reflection.Field(
-                    name=field.spec.name,
-                    number=field.spec.number,
-                    type=field.field_type.get_type(),
+                reflection.Variant(
+                    name=variant.spec.name,
+                    number=variant.spec.number,
+                    type=variant.value_type.get_type(),
+                    doc=variant.spec.doc,
                 )
-                for field in self.wrapper_fields
+                for variant in self.wrapper_variants
             ),
             removed_numbers=self.spec.removed_numbers,
         )
-        for field in self.wrapper_fields:
-            field.field_type.register_records(registry)
+        for variant in self.wrapper_variants:
+            variant.value_type.register_records(registry)
 
     def frozen_class_of_struct(self) -> type | None:
         return None
@@ -245,7 +248,7 @@ def _make_base_class(spec: _spec.Enum) -> type:
     return BaseClass
 
 
-def _make_constant_class(base_class: type, spec: _spec.ConstantField) -> type:
+def _make_constant_class(base_class: type, spec: _spec.ConstantVariant) -> type:
     byte_array = bytearray()
     encode_int64(spec.number, byte_array)
 
@@ -306,15 +309,15 @@ def _make_unrecognized_class(base_class: type) -> type:
 
 def _make_value_class(
     base_class: type,
-    field_spec: _spec.WrapperField,
-    field_type: TypeAdapter,
+    variant_spec: _spec.WrapperVariant,
+    value_type: TypeAdapter,
 ) -> type:
-    number = field_spec.number
+    number = variant_spec.number
 
     class Value(base_class):
         __slots__ = ()
 
-        kind: Final[str] = field_spec.name
+        kind: Final[str] = variant_spec.name
         _number: Final[int] = number
         # has value
         _hv: Final[bool] = True
@@ -330,7 +333,7 @@ def _make_value_class(
                 body = f"\n  {value_repr.indented}\n"
             else:
                 body = value_repr.repr
-            return f"{base_class.__qualname__}.wrap_{field_spec.name}({body})"
+            return f"{base_class.__qualname__}.wrap_{variant_spec.name}({body})"
 
     ret = Value
 
@@ -340,8 +343,8 @@ def _make_value_class(
             params=["self"],
             body=[
                 Line.join(
-                    f"return [{field_spec.number}, ",
-                    field_type.to_json_expr("self.value", readable=False),
+                    f"return [{variant_spec.number}, ",
+                    value_type.to_json_expr("self.value", readable=False),
                     "]",
                 ),
             ],
@@ -355,8 +358,8 @@ def _make_value_class(
             body=[
                 Line.join(
                     "return {",
-                    f'"kind": "{field_spec.name}", "value": ',
-                    field_type.to_json_expr("self.value", readable=True),
+                    f'"kind": "{variant_spec.name}", "value": ',
+                    value_type.to_json_expr("self.value", readable=True),
                     "}",
                 ),
             ],
@@ -376,7 +379,7 @@ def _make_value_class(
         body=[
             f"buffer.extend({bytes_prefix})",
             Line.join(
-                Expr.local("encode_value", field_type.encode_fn()),
+                Expr.local("encode_value", value_type.encode_fn()),
                 "(self.value, buffer)",
             ),
         ],
@@ -396,31 +399,31 @@ def _encode_impl(
 
 
 @dataclass(frozen=True)
-class _WrapperField:
-    spec: _spec.WrapperField
-    field_type: TypeAdapter
+class _WrapperVariant:
+    spec: _spec.WrapperVariant
+    value_type: TypeAdapter
     value_class: type
 
 
-def _make_wrapper_field(
-    spec: _spec.WrapperField, field_type: TypeAdapter, base_class: type
-) -> _WrapperField:
-    return _WrapperField(
+def _make_wrapper_variant(
+    spec: _spec.WrapperVariant, value_type: TypeAdapter, base_class: type
+) -> _WrapperVariant:
+    return _WrapperVariant(
         spec=spec,
-        field_type=field_type,
+        value_type=value_type,
         value_class=_make_value_class(
-            base_class=base_class, field_spec=spec, field_type=field_type
+            base_class=base_class, variant_spec=spec, value_type=value_type
         ),
     )
 
 
-def _make_wrap_fn(field: _WrapperField) -> Callable[[Any], Any]:
+def _make_wrap_fn(variant: _WrapperVariant) -> Callable[[Any], Any]:
     builder = BodyBuilder()
-    builder.append_ln("ret = ", Expr.local("value_class", field.value_class), "()")
+    builder.append_ln("ret = ", Expr.local("value_class", variant.value_class), "()")
     builder.append_ln(
         Expr.local("setattr", object.__setattr__),
         "(ret, 'value', ",
-        field.field_type.to_frozen_expr("value"),
+        variant.value_type.to_frozen_expr("value"),
         ")",
     )
     builder.append_ln("return ret")
@@ -439,8 +442,8 @@ def _make_create_fn(wrap_fn: Callable[[Any], Any], frozen_class: type) -> Callab
 
 
 def _make_from_json_fn(
-    constant_fields: Sequence[_spec.ConstantField],
-    wrapper_fields: Sequence[_WrapperField],
+    constant_variants: Sequence[_spec.ConstantVariant],
+    wrapper_variants: Sequence[_WrapperVariant],
     removed_numbers: set[int],
     base_class: type,
     unrecognized_class: type,
@@ -450,28 +453,28 @@ def _make_from_json_fn(
     removed_numbers_tuple = tuple(sorted(removed_numbers))
 
     key_to_constant: dict[Union[int, str], Any] = {}
-    for field in constant_fields:
-        constant = getattr(base_class, field.attribute)
-        key_to_constant[field.number] = constant
-        key_to_constant[field.name] = constant
+    for variant in constant_variants:
+        constant = getattr(base_class, variant.attribute)
+        key_to_constant[variant.number] = constant
+        key_to_constant[variant.name] = constant
     key_to_constant_local = Expr.local("key_to_constant", key_to_constant)
     unknown_constant = key_to_constant[0]
     unknown_constant_local = Expr.local("unknown_constant", unknown_constant)
 
-    number_to_wrapper_field: dict[int, _WrapperField] = {}
-    name_to_wrapper_field: dict[str, _WrapperField] = {}
-    for field in wrapper_fields:
-        number_to_wrapper_field[field.spec.number] = field
-        name_to_wrapper_field[field.spec.name] = field
-    wrapper_field_numbers = tuple(sorted(number_to_wrapper_field.keys()))
-    wrapper_field_names = tuple(sorted(name_to_wrapper_field.keys()))
+    number_to_wrapper_variant: dict[int, _WrapperVariant] = {}
+    name_to_wrapper_variant: dict[str, _WrapperVariant] = {}
+    for variant in wrapper_variants:
+        number_to_wrapper_variant[variant.spec.number] = variant
+        name_to_wrapper_variant[variant.spec.name] = variant
+    wrapper_variant_numbers = tuple(sorted(number_to_wrapper_variant.keys()))
+    wrapper_variant_names = tuple(sorted(name_to_wrapper_variant.keys()))
 
     builder = BodyBuilder()
     # The reason why we wrap the function inside a 'while' is explained below.
     builder.append_ln("while True:")
 
     # DENSE FORMAT
-    if len(constant_fields) == 1:
+    if len(constant_variants) == 1:
         builder.append_ln("  if json == 0:")
         builder.append_ln("    return ", unknown_constant_local)
     else:
@@ -482,7 +485,7 @@ def _make_from_json_fn(
         builder.append_ln("    except:")
         if removed_numbers:
             builder.append_ln(
-                f"      if json in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+                f"      if json in {removed_numbers_tuple} or not keep_unrecognized_values:"
             )
             builder.append_ln("        return ", unknown_constant_local)
         builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
@@ -490,10 +493,10 @@ def _make_from_json_fn(
     def append_number_branches(numbers: Sequence[int], indent: str) -> None:
         if len(numbers) == 1:
             number = numbers[0]
-            field = number_to_wrapper_field[number]
-            value_class_local = Expr.local("cls?", field.value_class)
-            value_expr = field.field_type.from_json_expr(
-                "json[1]", "keep_unrecognized_fields"
+            variant = number_to_wrapper_variant[number]
+            value_class_local = Expr.local("cls?", variant.value_class)
+            value_expr = variant.value_type.from_json_expr(
+                "json[1]", "keep_unrecognized_values"
             )
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
             builder.append_ln(
@@ -513,26 +516,26 @@ def _make_from_json_fn(
     # `json.__class__ is list` is significantly faster than `isinstance(json, list)`
     builder.append_ln("  elif json.__class__ is list:")
     builder.append_ln("    number = json[0]")
-    if not wrapper_fields:
-        # The field was either removed or is an unrecognized field.
+    if not wrapper_variants:
+        # The variant was either removed or is an unrecognized variant.
         if removed_numbers:
             builder.append_ln(
-                f"    if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+                f"    if number in {removed_numbers_tuple} or not keep_unrecognized_values:"
             )
             builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    return ", unrecognized_class_local, "(json, b'\\0')")
     else:
-        builder.append_ln(f"    if number not in {wrapper_field_numbers}:")
+        builder.append_ln(f"    if number not in {wrapper_variant_numbers}:")
         if removed_numbers:
             builder.append_ln(
-                f"      if number in {removed_numbers_tuple} or not keep_unrecognized_fields:"
+                f"      if number in {removed_numbers_tuple} or not keep_unrecognized_values:"
             )
             builder.append_ln("        return ", unknown_constant_local)
         builder.append_ln("      return ", unrecognized_class_local, "(json, b'\\0')")
-        append_number_branches(wrapper_field_numbers, "    ")
+        append_number_branches(wrapper_variant_numbers, "    ")
 
     # READABLE FORMAT
-    if len(constant_fields) == 1:
+    if len(constant_variants) == 1:
         builder.append_ln("  elif json == '?':")
         builder.append_ln("    return ", unknown_constant_local)
     else:
@@ -546,10 +549,10 @@ def _make_from_json_fn(
     def append_name_branches(names: Sequence[str], indent: str) -> None:
         if len(names) == 1:
             name = names[0]
-            field = name_to_wrapper_field[name]
-            value_class_local = Expr.local("cls?", field.value_class)
-            value_expr = field.field_type.from_json_expr(
-                "json['value']", "keep_unrecognized_fields"
+            variant = name_to_wrapper_variant[name]
+            value_class_local = Expr.local("cls?", variant.value_class)
+            value_expr = variant.value_type.from_json_expr(
+                "json['value']", "keep_unrecognized_values"
             )
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
             builder.append_ln(
@@ -567,14 +570,14 @@ def _make_from_json_fn(
             append_name_branches(names[mid_index:], indented)
 
     builder.append_ln("  elif isinstance(json, dict):")
-    if not wrapper_fields:
+    if not wrapper_variants:
         builder.append_ln("    return ", unknown_constant_local)
     else:
         builder.append_ln("    kind = json['kind']")
-        builder.append_ln(f"    if kind not in {wrapper_field_names}:")
+        builder.append_ln(f"    if kind not in {wrapper_variant_names}:")
         builder.append_ln("      return ", unknown_constant_local)
         builder.append_ln("    else:")
-        append_name_branches(wrapper_field_names, "      ")
+        append_name_branches(wrapper_variant_names, "      ")
 
     # In the unlikely event that json.loads() returns an instance of a subclass of int.
     builder.append_ln("  elif isinstance(json, int):")
@@ -586,14 +589,14 @@ def _make_from_json_fn(
 
     return make_function(
         name="from_json",
-        params=["json", "keep_unrecognized_fields"],
+        params=["json", "keep_unrecognized_values"],
         body=builder.build(),
     )
 
 
 def _make_decode_fn(
-    constant_fields: Sequence[_spec.ConstantField],
-    wrapper_fields: Sequence[_WrapperField],
+    constant_variants: Sequence[_spec.ConstantVariant],
+    wrapper_variants: Sequence[_WrapperVariant],
     removed_numbers: set[int],
     base_class: type,
     unrecognized_class: type,
@@ -602,18 +605,18 @@ def _make_decode_fn(
     obj_setattr_local = Expr.local("obj_settatr", object.__setattr__)
 
     number_to_constant: dict[int, Any] = {}
-    for field in constant_fields:
-        constant = getattr(base_class, field.attribute)
-        number_to_constant[field.number] = constant
+    for variant in constant_variants:
+        constant = getattr(base_class, variant.attribute)
+        number_to_constant[variant.number] = constant
     number_to_constant_local = Expr.local("number_to_constant", number_to_constant)
     removed_numbers_tuple = tuple(sorted(removed_numbers))
     unknown_constant = number_to_constant[0]
     unknown_constant_local = Expr.local("unknown_constant", unknown_constant)
 
-    number_to_wrapper_field: dict[int, _WrapperField] = {}
-    for field in wrapper_fields:
-        number_to_wrapper_field[field.spec.number] = field
-    wrapper_field_numbers = tuple(sorted(number_to_wrapper_field.keys()))
+    number_to_wrapper_variant: dict[int, _WrapperVariant] = {}
+    for variant in wrapper_variants:
+        number_to_wrapper_variant[variant.spec.number] = variant
+    wrapper_variant_numbers = tuple(sorted(number_to_wrapper_variant.keys()))
 
     builder = BodyBuilder()
     builder.append_ln("start_offset = stream.position")
@@ -632,7 +635,7 @@ def _make_decode_fn(
     builder.append_ln("  except:")
     if removed_numbers:
         builder.append_ln(
-            f"    if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
+            f"    if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
         )
         builder.append_ln("      return ", unknown_constant_local)
     builder.append_ln("    bytes = stream.buffer[start_offset:stream.position]")
@@ -649,9 +652,9 @@ def _make_decode_fn(
     def append_number_branches(numbers: Sequence[int], indent: str) -> None:
         if len(numbers) == 1:
             number = numbers[0]
-            field = number_to_wrapper_field[number]
-            value_class_local = Expr.local("cls?", field.value_class)
-            decode_local = Expr.local("decode?", field.field_type.decode_fn())
+            variant = number_to_wrapper_variant[number]
+            value_class_local = Expr.local("cls?", variant.value_class)
+            decode_local = Expr.local("decode?", variant.value_type.decode_fn())
             value_expr = Expr.join(decode_local, "(stream)")
             builder.append_ln(f"{indent}ret = ", value_class_local, "()")
             builder.append_ln(
@@ -668,27 +671,27 @@ def _make_decode_fn(
             builder.append_ln(f"{indent}else:")
             append_number_branches(numbers[mid_index:], indented)
 
-    if not wrapper_fields:
-        # The field was either removed or is an unrecognized field.
+    if not wrapper_variants:
+        # The variant was either removed or is an unrecognized variant.
         builder.append_ln(Expr.local("decode_unused", decode_unused), "(stream)")
         if removed_numbers:
             builder.append_ln(
-                f"if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
+                f"if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
             )
             builder.append_ln("  return ", unknown_constant_local)
         builder.append_ln("bytes = stream.buffer[start_offset:stream.position]")
         builder.append_ln("return ", unrecognized_class_local, "(0, bytes)")
     else:
-        builder.append_ln(f"if number not in {wrapper_field_numbers}:")
+        builder.append_ln(f"if number not in {wrapper_variant_numbers}:")
         builder.append_ln("  ", Expr.local("decode_unused", decode_unused), "(stream)")
         if removed_numbers:
             builder.append_ln(
-                f"  if number in {removed_numbers_tuple} or not stream.keep_unrecognized_fields:"
+                f"  if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
             )
             builder.append_ln("    return ", unknown_constant_local)
         builder.append_ln("  bytes = stream.buffer[start_offset:stream.position]")
         builder.append_ln("  return ", unrecognized_class_local, "(0, bytes)")
-        append_number_branches(wrapper_field_numbers, "")
+        append_number_branches(wrapper_variant_numbers, "")
 
     return make_function(
         name="decode",

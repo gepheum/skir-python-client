@@ -283,14 +283,16 @@ class StructAdapter(Generic[T], TypeAdapter[T]):
         record_id = self.spec.id
         if record_id in registry:
             return
-        registry[record_id] = reflection.Record(
+        registry[record_id] = reflection.Struct(
             kind="struct",
             id=record_id,
+            doc=self.spec.doc,
             fields=tuple(
                 reflection.Field(
                     name=field.field.name,
                     number=field.field.number,
                     type=field.type.get_type(),
+                    doc=field.field.doc,
                 )
                 for field in self.fields
             ),
@@ -842,14 +844,14 @@ def _make_from_json_fn(
             f"  ret.{field.field.attribute} = ",
             field.type.default_expr(),
             f" if array_len <= {number} else ",
-            field.type.from_json_expr(item_expr, "keep_unrecognized_fields"),
+            field.type.from_json_expr(item_expr, "keep_unrecognized_values"),
         )
     if fields:
         num_slots_excl_removed = fields[-1].field.number + 1
     else:
         num_slots_excl_removed = 0
     builder.append_ln(
-        f"  if array_len <= {num_slots_incl_removed} or not keep_unrecognized_fields:"
+        f"  if array_len <= {num_slots_incl_removed} or not keep_unrecognized_values:"
     )
     builder.append_ln("    ret._unrecognized = None")
     builder.append_ln("  else:")
@@ -879,7 +881,7 @@ def _make_from_json_fn(
         builder.append_ln(f"    array_len = {field.field.number + 1}")
         builder.append_ln(
             f"    {lvalue} = ",
-            field.type.from_json_expr(f'json["{name}"]', "keep_unrecognized_fields"),
+            field.type.from_json_expr(f'json["{name}"]', "keep_unrecognized_values"),
         )
         builder.append_ln("  else:")
         builder.append_ln(f"    {lvalue} = ", field.type.default_expr())
@@ -892,7 +894,7 @@ def _make_from_json_fn(
 
     return make_function(
         name="from_json",
-        params=["json", "keep_unrecognized_fields"],
+        params=["json", "keep_unrecognized_values"],
         body=builder.build(),
     )
 
@@ -945,7 +947,7 @@ def _make_decode_fn(
 
     builder.append_ln(f"if array_len > {num_slots_excl_removed}:")
     builder.append_ln(
-        f"  if array_len > {num_slots_incl_removed} and stream.keep_unrecognized_fields:"
+        f"  if array_len > {num_slots_incl_removed} and stream.keep_unrecognized_values:"
     )
     for _ in range(num_slots_incl_removed - num_slots_excl_removed):
         builder.append_ln(

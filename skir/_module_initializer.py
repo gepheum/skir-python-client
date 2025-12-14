@@ -89,6 +89,7 @@ def init_module(
             number=method_spec.number,
             request_serializer=request_serializer,
             response_serializer=response_serializer,
+            doc=method_spec.doc,
         )
         del var_name, request_serializer, response_serializer
 
