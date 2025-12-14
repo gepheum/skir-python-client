@@ -4,9 +4,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Generic, Union, cast
 
-from soia import _spec, reflection
-from soia._impl.binary import decode_int64, decode_unused, encode_length_prefix
-from soia._impl.function_maker import (
+from skir import _spec, reflection
+from skir._impl.binary import decode_int64, decode_unused, encode_length_prefix
+from skir._impl.function_maker import (
     BodyBuilder,
     Expr,
     ExprLike,
@@ -17,9 +17,9 @@ from soia._impl.function_maker import (
     Params,
     make_function,
 )
-from soia._impl.keep import KEEP
-from soia._impl.repr import repr_impl
-from soia._impl.type_adapter import ByteStream, T, TypeAdapter
+from skir._impl.keep import KEEP
+from skir._impl.repr import repr_impl
+from skir._impl.type_adapter import ByteStream, T, TypeAdapter
 
 
 class StructAdapter(Generic[T], TypeAdapter[T]):

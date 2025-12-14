@@ -5,10 +5,10 @@ from functools import cached_property
 from typing import Any, Generic, TypeVar, cast, final
 from weakref import WeakValueDictionary
 
-from soia import reflection
-from soia._impl.function_maker import Expr, LineSpan, make_function
-from soia._impl.never import Never
-from soia._impl.type_adapter import ByteStream, TypeAdapter
+from skir import reflection
+from skir._impl.function_maker import Expr, LineSpan, make_function
+from skir._impl.never import Never
+from skir._impl.type_adapter import ByteStream, TypeAdapter
 
 T = TypeVar("T")
 
@@ -70,12 +70,12 @@ class Serializer(Generic[T]):
         return self._from_json_fn(jsonlib.loads(json_code), keep_unrecognized_fields)
 
     def to_bytes(self, input: T) -> bytes:
-        buffer = bytearray(b"soia")
+        buffer = bytearray(b"skir")
         self._encode_fn(input, buffer)
         return bytes(buffer)
 
     def from_bytes(self, bytes: bytes, keep_unrecognized_fields: bool = False) -> T:
-        if bytes.startswith(b"soia"):
+        if bytes.startswith(b"skir"):
             stream = ByteStream(
                 bytes, position=4, keep_unrecognized_fields=keep_unrecognized_fields
             )

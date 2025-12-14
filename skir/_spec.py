@@ -36,6 +36,7 @@ class Field:
     name: str
     number: int
     type: Type
+    doc: str = ""
     has_mutable_getter: bool = False
     _attribute: str = ""  # If different from 'name'
 
@@ -47,6 +48,7 @@ class Field:
 @dataclass(frozen=True)
 class Struct:
     id: str
+    doc: str = ""
     fields: tuple[Field, ...] = ()
     removed_numbers: tuple[int, ...] = ()
     _class_name: str = ""  # If different from the record name
@@ -67,6 +69,7 @@ class ConstantField:
 
     name: str
     number: int
+    doc: str = ""
     _attribute: str = ""  # If different from 'name'
 
     @property
@@ -81,11 +84,13 @@ class WrapperField:
     name: str
     number: int
     type: Type
+    doc: str = ""
 
 
 @dataclass(frozen=True)
 class Enum:
     id: str
+    doc: str = ""
     constant_fields: tuple[ConstantField, ...] = ()
     wrapper_fields: tuple[WrapperField, ...] = ()
     removed_numbers: tuple[int, ...] = ()
@@ -147,6 +152,7 @@ class Method:
     number: int
     request_type: Type
     response_type: Type
+    doc: str = ""
     _var_name: str = ""  # If different from 'name'
 
 

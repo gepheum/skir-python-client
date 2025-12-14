@@ -1,17 +1,17 @@
 import typing as _typing
 
-from soia._impl.keep import KEEP, Keep
-from soia._impl.keyed_items import KeyedItems
-from soia._impl.method import Method
-from soia._impl.serializer import Serializer
-from soia._impl.serializers import (
+from skir._impl.keep import KEEP, Keep
+from skir._impl.keyed_items import KeyedItems
+from skir._impl.method import Method
+from skir._impl.serializer import Serializer
+from skir._impl.serializers import (
     array_serializer,
     optional_serializer,
     primitive_serializer,
 )
-from soia._impl.service import RawServiceResponse, Service, ServiceAsync
-from soia._impl.service_client import ServiceClient
-from soia._impl.timestamp import Timestamp
+from skir._impl.service import RawServiceResponse, Service, ServiceAsync
+from skir._impl.service_client import ServiceClient
+from skir._impl.timestamp import Timestamp
 
 _: _typing.Final[_typing.Any] = None
 

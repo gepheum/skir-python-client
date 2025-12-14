@@ -4,8 +4,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Generic, Literal, TypeVar, Union, cast
 
-from soia._impl.method import Method, Request, Response
-from soia._impl.never import Never
+from skir._impl.method import Method, Request, Response
+from skir._impl.never import Never
 
 RequestHeaders = TypeVar("RequestHeaders")
 
@@ -207,6 +207,7 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             else:
                 _: Never = request_data[0]
                 del _
+                req = None  # To please the type checker
         except Exception as e:
             return RawServiceResponse(
                 f"bad request: can't parse JSON: {e}", "bad-request"
@@ -343,7 +344,7 @@ class _ServiceImpl(Generic[RequestHeaders, ResponseHeaders]):
 
 
 class Service(Generic[RequestHeaders, ResponseHeaders]):
-    """Wraps around the implementation of a soia service on the server side.
+    """Wraps around the implementation of a skir service on the server side.
 
     Usage: call '.add_method()' to register method implementations, then call
     '.handle_request()' from the function called by your web framework when an
@@ -355,7 +356,7 @@ class Service(Generic[RequestHeaders, ResponseHeaders]):
         from werkzeug.datastructures import Headers
 
 
-        s = soia.Service[Headers, Headers]()
+        s = skir.Service[Headers, Headers]()
         s.add_method(...)
         s.add_method(...)
 

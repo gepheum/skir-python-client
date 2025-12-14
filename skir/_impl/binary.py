@@ -1,8 +1,8 @@
 import struct
 from typing import Callable, Final, Literal
 
-from soia._impl.function_maker import BodyBuilder, Expr, ExprLike, make_function
-from soia._impl.type_adapter import ByteStream
+from skir._impl.function_maker import BodyBuilder, Expr, ExprLike, make_function
+from skir._impl.type_adapter import ByteStream
 
 
 def encode_int32(input_val: int, buffer: bytearray) -> None:

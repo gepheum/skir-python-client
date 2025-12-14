@@ -1,6 +1,6 @@
 import unittest
 
-from soia import Timestamp, array_serializer, optional_serializer, primitive_serializer
+from skir import Timestamp, array_serializer, optional_serializer, primitive_serializer
 
 
 class SerializersTestCase(unittest.TestCase):
@@ -183,29 +183,29 @@ class BinarySerializationTestCase(unittest.TestCase):
 
     def test_bool_binary_serialization(self):
         """Test bool binary encoding."""
-        # Test true -> "736f696101" (soia prefix + 01)
+        # Test true -> "736b697201" (skir prefix + 01)
         true_bytes = primitive_serializer("bool").to_bytes(True)
-        self.assertEqual(true_bytes.hex(), "736f696101")
+        self.assertEqual(true_bytes.hex(), "736b697201")
         self.assertEqual(primitive_serializer("bool").from_bytes(true_bytes), True)
 
-        # Test false -> "736f696100" (soia prefix + 00)
+        # Test false -> "736b697200" (skir prefix + 00)
         false_bytes = primitive_serializer("bool").to_bytes(False)
-        self.assertEqual(false_bytes.hex(), "736f696100")
+        self.assertEqual(false_bytes.hex(), "736b697200")
         self.assertEqual(primitive_serializer("bool").from_bytes(false_bytes), False)
 
     def test_int32_binary_encoding_specifics(self):
         """Test specific wire format encoding for int32."""
         test_cases = {
-            0: "736f696100",
-            1: "736f696101",
-            231: "736f6961e7",
-            232: "736f6961e8e800",
-            257: "736f6961e80101",
-            65535: "736f6961e8ffff",
-            65536: "736f6961e900000100",
-            -1: "736f6961ebff",
-            -256: "736f6961eb00",
-            -257: "736f6961ecfffe",
+            0: "736b697200",
+            1: "736b697201",
+            231: "736b6972e7",
+            232: "736b6972e8e800",
+            257: "736b6972e80101",
+            65535: "736b6972e8ffff",
+            65536: "736b6972e900000100",
+            -1: "736b6972ebff",
+            -256: "736b6972eb00",
+            -257: "736b6972ecfffe",
         }
 
         for value, expected_hex in test_cases.items():
@@ -295,12 +295,12 @@ class BinarySerializationTestCase(unittest.TestCase):
     def test_string_binary_encoding_edge_cases(self):
         """Test string encoding edge cases."""
         test_cases = {
-            "": "736f6961f2",
-            "0": "736f6961f30130",
-            "A": "736f6961f30141",
-            "🚀": "736f6961f304f09f9a80",
-            "\u0000": "736f6961f30100",
-            "Hello\nWorld": "736f6961f30b48656c6c6f0a576f726c64",
+            "": "736b6972f2",
+            "0": "736b6972f30130",
+            "A": "736b6972f30141",
+            "🚀": "736b6972f304f09f9a80",
+            "\u0000": "736b6972f30100",
+            "Hello\nWorld": "736b6972f30b48656c6c6f0a576f726c64",
         }
 
         for value, expected_hex in test_cases.items():
@@ -344,9 +344,9 @@ class BinarySerializationTestCase(unittest.TestCase):
     def test_timestamp_binary_encoding_specifics(self):
         """Test timestamp binary encoding specifics."""
         test_cases = {
-            Timestamp.from_unix_millis(0): "736f696100",
-            Timestamp.from_unix_millis(1000): "736f6961efe803000000000000",
-            Timestamp.from_unix_millis(-1000): "736f6961ef18fcffffffffffff",
+            Timestamp.from_unix_millis(0): "736b697200",
+            Timestamp.from_unix_millis(1000): "736b6972efe803000000000000",
+            Timestamp.from_unix_millis(-1000): "736b6972ef18fcffffffffffff",
         }
 
         for instant, expected_hex in test_cases.items():
@@ -383,7 +383,7 @@ class BinarySerializationTestCase(unittest.TestCase):
             with self.subTest(serializer=ser):
                 # Test null values in binary format
                 null_bytes = ser.to_bytes(None)
-                self.assertEqual(null_bytes.hex(), "736f6961ff")  # Should end with 0xFF
+                self.assertEqual(null_bytes.hex(), "736b6972ff")  # Should end with 0xFF
                 restored = ser.from_bytes(null_bytes)
                 self.assertIsNone(restored)
 
@@ -422,10 +422,10 @@ class BinarySerializationTestCase(unittest.TestCase):
         int_optional = optional_serializer(primitive_serializer("int32"))
 
         test_cases = {
-            None: "736f6961ff",
-            0: "736f696100",
-            42: "736f69612a",
-            -1: "736f6961ebff",
+            None: "736b6972ff",
+            0: "736b697200",
+            42: "736b69722a",
+            -1: "736b6972ebff",
         }
 
         for value, expected_hex in test_cases.items():
@@ -444,19 +444,19 @@ class BinarySerializationTestCase(unittest.TestCase):
         # Test empty arrays - should have wire format 0xF6 (246)
         empty_int_array = ()
         empty_int_bytes = int_array_ser.to_bytes(empty_int_array)
-        self.assertEqual(empty_int_bytes.hex(), "736f6961f6")
+        self.assertEqual(empty_int_bytes.hex(), "736b6972f6")
         self.assertEqual(int_array_ser.from_bytes(empty_int_bytes), empty_int_array)
 
         empty_string_array = ()
         empty_string_bytes = string_array_ser.to_bytes(empty_string_array)
-        self.assertEqual(empty_string_bytes.hex(), "736f6961f6")
+        self.assertEqual(empty_string_bytes.hex(), "736b6972f6")
         self.assertEqual(
             string_array_ser.from_bytes(empty_string_bytes), empty_string_array
         )
 
         empty_bool_array = ()
         empty_bool_bytes = bool_array_ser.to_bytes(empty_bool_array)
-        self.assertEqual(empty_bool_bytes.hex(), "736f6961f6")
+        self.assertEqual(empty_bool_bytes.hex(), "736b6972f6")
         self.assertEqual(bool_array_ser.from_bytes(empty_bool_bytes), empty_bool_array)
 
     def test_list_with_small_arrays_binary(self):
@@ -466,19 +466,19 @@ class BinarySerializationTestCase(unittest.TestCase):
         # Test single element array (wire 247)
         single_array = (42,)
         single_bytes = int_array_ser.to_bytes(single_array)
-        self.assertTrue(single_bytes.hex().startswith("736f6961f7"))
+        self.assertTrue(single_bytes.hex().startswith("736b6972f7"))
         self.assertEqual(int_array_ser.from_bytes(single_bytes), single_array)
 
         # Test two element array (wire 248)
         double_array = (1, 2)
         double_bytes = int_array_ser.to_bytes(double_array)
-        self.assertTrue(double_bytes.hex().startswith("736f6961f8"))
+        self.assertTrue(double_bytes.hex().startswith("736b6972f8"))
         self.assertEqual(int_array_ser.from_bytes(double_bytes), double_array)
 
         # Test three element array (wire 249)
         triple_array = (10, 20, 30)
         triple_bytes = int_array_ser.to_bytes(triple_array)
-        self.assertTrue(triple_bytes.hex().startswith("736f6961f9"))
+        self.assertTrue(triple_bytes.hex().startswith("736b6972f9"))
         self.assertEqual(int_array_ser.from_bytes(triple_bytes), triple_array)
 
     def test_list_with_large_arrays_binary(self):
@@ -488,13 +488,13 @@ class BinarySerializationTestCase(unittest.TestCase):
         # Test array with 10 elements
         large_array = tuple(range(1, 11))
         large_bytes = int_array_ser.to_bytes(large_array)
-        self.assertTrue(large_bytes.hex().startswith("736f6961fa"))
+        self.assertTrue(large_bytes.hex().startswith("736b6972fa"))
         self.assertEqual(int_array_ser.from_bytes(large_bytes), large_array)
 
         # Test array with 100 elements
         very_large_array = tuple(range(1, 101))
         very_large_bytes = int_array_ser.to_bytes(very_large_array)
-        self.assertTrue(very_large_bytes.hex().startswith("736f6961fa"))
+        self.assertTrue(very_large_bytes.hex().startswith("736b6972fa"))
         self.assertEqual(int_array_ser.from_bytes(very_large_bytes), very_large_array)
 
     def test_list_binary_format_specifics(self):
@@ -502,10 +502,10 @@ class BinarySerializationTestCase(unittest.TestCase):
         int_array_ser = array_serializer(primitive_serializer("int32"))
 
         test_cases = {
-            (): "736f6961f6",
-            (1,): "736f6961f701",
-            (1, 2): "736f6961f80102",
-            (1, 2, 3): "736f6961f9010203",
+            (): "736b6972f6",
+            (1,): "736b6972f701",
+            (1, 2): "736b6972f80102",
+            (1, 2, 3): "736b6972f9010203",
         }
 
         for array, expected_hex in test_cases.items():

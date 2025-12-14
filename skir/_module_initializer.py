@@ -1,9 +1,9 @@
 from typing import Any, Union
 
-from soia import _spec
-from soia._impl import arrays, enums, method, optionals, primitives, structs
-from soia._impl.serializer import make_serializer
-from soia._impl.type_adapter import TypeAdapter
+from skir import _spec
+from skir._impl import arrays, enums, method, optionals, primitives, structs
+from skir._impl.serializer import make_serializer
+from skir._impl.type_adapter import TypeAdapter
 
 RecordAdapter = Union[structs.StructAdapter, enums.EnumAdapter]
 

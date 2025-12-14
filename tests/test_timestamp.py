@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from soia import Timestamp
+from skir import Timestamp
 
 
 class TimestampTestCase(unittest.TestCase):

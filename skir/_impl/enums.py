@@ -3,11 +3,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import FrozenInstanceError, dataclass
 from typing import Any, Final, Generic, Union
 
-from soia import _spec, reflection
-from soia._impl.binary import decode_int64, decode_unused, encode_int64
-from soia._impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
-from soia._impl.repr import repr_impl
-from soia._impl.type_adapter import ByteStream, T, TypeAdapter
+from skir import _spec, reflection
+from skir._impl.binary import decode_int64, decode_unused, encode_int64
+from skir._impl.function_maker import BodyBuilder, Expr, ExprLike, Line, make_function
+from skir._impl.repr import repr_impl
+from skir._impl.type_adapter import ByteStream, T, TypeAdapter
 
 
 class EnumAdapter(Generic[T], TypeAdapter[T]):
@@ -216,7 +216,7 @@ def _make_base_class(spec: _spec.Enum) -> type:
         value: Any
 
         def __init__(self, never: Any):
-            raise TypeError("Cannot call the constructor of a soia enum")
+            raise TypeError("Cannot call the constructor of a skir enum")
 
         @property
         def union(self) -> Any:

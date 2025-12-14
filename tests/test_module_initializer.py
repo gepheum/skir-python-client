@@ -2,9 +2,9 @@ import dataclasses
 import unittest
 from typing import Any
 
-from soia import KeyedItems, Method, Timestamp, _spec
-from soia._module_initializer import init_module
-from soia.reflection import TypeDescriptor
+from skir import KeyedItems, Method, Timestamp, _spec
+from skir._module_initializer import init_module
+from skir.reflection import TypeDescriptor
 
 
 class ModuleInitializerTestCase(unittest.TestCase):
@@ -13,7 +13,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         init_module(
             records=(
                 _spec.Struct(
-                    id="my/module.soia:Point",
+                    id="my/module.skir:Point",
                     fields=(
                         _spec.Field(
                             name="x",
@@ -29,42 +29,42 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     removed_numbers=(1,),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Segment",
+                    id="my/module.skir:Segment",
                     fields=(
                         _spec.Field(
                             name="a",
                             number=0,
-                            type="my/module.soia:Point",
+                            type="my/module.skir:Point",
                             has_mutable_getter=True,
                         ),
                         _spec.Field(
                             name="bb",
                             _attribute="b",
                             number=1,
-                            type="my/module.soia:Point",
+                            type="my/module.skir:Point",
                             has_mutable_getter=True,
                         ),
                         _spec.Field(
                             name="c",
                             number=2,
-                            type=_spec.OptionalType("my/module.soia:Point"),
+                            type=_spec.OptionalType("my/module.skir:Point"),
                             has_mutable_getter=True,
                         ),
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Shape",
+                    id="my/module.skir:Shape",
                     fields=(
                         _spec.Field(
                             name="points",
                             number=0,
-                            type=_spec.ArrayType("my/module.soia:Point"),
+                            type=_spec.ArrayType("my/module.skir:Point"),
                             has_mutable_getter=True,
                         ),
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Primitives",
+                    id="my/module.skir:Primitives",
                     fields=(
                         _spec.Field(
                             name="bool",
@@ -114,18 +114,18 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:After",
+                    id="my/module.skir:After",
                     fields=(
                         _spec.Field(
                             name="points",
                             number=0,
-                            type=_spec.ArrayType("my/module.soia:Point"),
+                            type=_spec.ArrayType("my/module.skir:Point"),
                             has_mutable_getter=True,
                         ),
                     ),
                 ),
                 _spec.Enum(
-                    id="my/module.soia:PrimaryColor",
+                    id="my/module.skir:PrimaryColor",
                     constant_fields=(
                         _spec.ConstantField(
                             name="RED",
@@ -142,7 +142,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
                 _spec.Enum(
-                    id="my/module.soia:Status",
+                    id="my/module.skir:Status",
                     constant_fields=(
                         _spec.ConstantField(
                             name="OK",
@@ -159,7 +159,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     removed_numbers=(1, 4),
                 ),
                 _spec.Enum(
-                    id="my/module.soia:JsonValue",
+                    id="my/module.skir:JsonValue",
                     constant_fields=(
                         _spec.ConstantField(
                             name="NULL",
@@ -185,12 +185,12 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         _spec.WrapperField(
                             name="array",
                             number=5,
-                            type=_spec.ArrayType("my/module.soia:JsonValue"),
+                            type=_spec.ArrayType("my/module.skir:JsonValue"),
                         ),
                         _spec.WrapperField(
                             name="object",
                             number=6,
-                            type="my/module.soia:JsonValue.Object",
+                            type="my/module.skir:JsonValue.Object",
                         ),
                     ),
                     removed_numbers=(
@@ -199,20 +199,20 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:JsonValue.Object",
+                    id="my/module.skir:JsonValue.Object",
                     fields=(
                         _spec.Field(
                             name="entries",
                             number=0,
                             type=_spec.ArrayType(
-                                item="my/module.soia:JsonValue.ObjectEntry",
+                                item="my/module.skir:JsonValue.ObjectEntry",
                                 key_attributes=("name",),
                             ),
                         ),
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:JsonValue.ObjectEntry",
+                    id="my/module.skir:JsonValue.ObjectEntry",
                     fields=(
                         _spec.Field(
                             name="name",
@@ -222,25 +222,25 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         _spec.Field(
                             name="value",
                             number=1,
-                            type="my/module.soia:JsonValue",
+                            type="my/module.skir:JsonValue",
                         ),
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Parent",
+                    id="my/module.skir:Parent",
                     fields=(),
                 ),
                 _spec.Enum(
-                    id="my/module.soia:Parent.NestedEnum",
+                    id="my/module.skir:Parent.NestedEnum",
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Stuff",
+                    id="my/module.skir:Stuff",
                     fields=(
                         _spec.Field(
                             name="enum_wrappers",
                             number=0,
                             type=_spec.ArrayType(
-                                item="my/module.soia:EnumWrapper",
+                                item="my/module.skir:EnumWrapper",
                                 key_attributes=(
                                     "status",
                                     "kind",
@@ -250,17 +250,17 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:EnumWrapper",
+                    id="my/module.skir:EnumWrapper",
                     fields=(
                         _spec.Field(
                             name="status",
                             number=0,
-                            type="my/module.soia:Status",
+                            type="my/module.skir:Status",
                         ),
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Stuff.Overrides",
+                    id="my/module.skir:Stuff.Overrides",
                     _class_name="NameOverrides",
                     _class_qualname="Stuff.NameOverrides",
                     fields=(
@@ -273,32 +273,32 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:RecOuter",
+                    id="my/module.skir:RecOuter",
                     fields=(
                         _spec.Field(
                             name="r",
                             number=0,
-                            type="my/module.soia:RecOuter.RecInner",
+                            type="my/module.skir:RecOuter.RecInner",
                         ),
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:RecOuter.RecInner",
+                    id="my/module.skir:RecOuter.RecInner",
                     fields=(
                         _spec.Field(
                             name="r",
                             number=0,
-                            type="my/module.soia:RecOuter",
+                            type="my/module.skir:RecOuter",
                         ),
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Rec",
+                    id="my/module.skir:Rec",
                     fields=(
                         _spec.Field(
                             name="r",
                             number=0,
-                            type="my/module.soia:Rec",
+                            type="my/module.skir:Rec",
                         ),
                         _spec.Field(
                             name="x",
@@ -308,7 +308,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     ),
                 ),
                 _spec.Struct(
-                    id="my/module.soia:Foobar",
+                    id="my/module.skir:Foobar",
                     fields=(
                         _spec.Field(
                             name="a",
@@ -323,7 +323,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         _spec.Field(
                             name="point",
                             number=4,
-                            type="my/module.soia:Point",
+                            type="my/module.skir:Point",
                         ),
                     ),
                     removed_numbers=(0, 2),
@@ -333,21 +333,21 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 _spec.Method(
                     name="FirstMethod",
                     number=-300,
-                    request_type="my/module.soia:Point",
-                    response_type="my/module.soia:Shape",
+                    request_type="my/module.skir:Point",
+                    response_type="my/module.skir:Shape",
                 ),
                 _spec.Method(
                     name="SecondMethod",
                     number=-301,
-                    request_type="my/module.soia:Point",
-                    response_type="my/module.soia:Shape",
+                    request_type="my/module.skir:Point",
+                    response_type="my/module.skir:Shape",
                     _var_name="MethodVar",
                 ),
             ),
             constants=(
                 _spec.Constant(
                     name="C",
-                    type="my/module.soia:Point",
+                    type="my/module.skir:Point",
                     json_code="[1.5, 0, 2.5]",
                 ),
             ),
@@ -1250,11 +1250,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(
             type_descriptor.as_json(),
             {
-                "type": {"kind": "record", "value": "my/module.soia:JsonValue"},
+                "type": {"kind": "record", "value": "my/module.skir:JsonValue"},
                 "records": [
                     {
                         "kind": "enum",
-                        "id": "my/module.soia:JsonValue",
+                        "id": "my/module.skir:JsonValue",
                         "fields": [
                             {
                                 "name": "NULL",
@@ -1282,7 +1282,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                                     "value": {
                                         "item": {
                                             "kind": "record",
-                                            "value": "my/module.soia:JsonValue",
+                                            "value": "my/module.skir:JsonValue",
                                         },
                                     },
                                 },
@@ -1292,7 +1292,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                                 "name": "object",
                                 "type": {
                                     "kind": "record",
-                                    "value": "my/module.soia:JsonValue.Object",
+                                    "value": "my/module.skir:JsonValue.Object",
                                 },
                                 "number": 6,
                             },
@@ -1301,7 +1301,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     },
                     {
                         "kind": "struct",
-                        "id": "my/module.soia:JsonValue.Object",
+                        "id": "my/module.skir:JsonValue.Object",
                         "fields": [
                             {
                                 "name": "entries",
@@ -1310,7 +1310,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                                     "value": {
                                         "item": {
                                             "kind": "record",
-                                            "value": "my/module.soia:JsonValue.ObjectEntry",
+                                            "value": "my/module.skir:JsonValue.ObjectEntry",
                                         },
                                         "key_extractor": "name",
                                     },
@@ -1321,7 +1321,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     },
                     {
                         "kind": "struct",
-                        "id": "my/module.soia:JsonValue.ObjectEntry",
+                        "id": "my/module.skir:JsonValue.ObjectEntry",
                         "fields": [
                             {
                                 "name": "name",
@@ -1332,7 +1332,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                                 "name": "value",
                                 "type": {
                                     "kind": "record",
-                                    "value": "my/module.soia:JsonValue",
+                                    "value": "my/module.skir:JsonValue",
                                 },
                                 "number": 1,
                             },
@@ -1357,17 +1357,17 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(
             type_descriptor.as_json(),
             {
-                "type": {"kind": "record", "value": "my/module.soia:Segment"},
+                "type": {"kind": "record", "value": "my/module.skir:Segment"},
                 "records": [
                     {
                         "kind": "struct",
-                        "id": "my/module.soia:Segment",
+                        "id": "my/module.skir:Segment",
                         "fields": [
                             {
                                 "name": "a",
                                 "type": {
                                     "kind": "record",
-                                    "value": "my/module.soia:Point",
+                                    "value": "my/module.skir:Point",
                                 },
                                 "number": 0,
                             },
@@ -1375,7 +1375,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                                 "name": "bb",
                                 "type": {
                                     "kind": "record",
-                                    "value": "my/module.soia:Point",
+                                    "value": "my/module.skir:Point",
                                 },
                                 "number": 1,
                             },
@@ -1385,7 +1385,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                                     "kind": "optional",
                                     "value": {
                                         "kind": "record",
-                                        "value": "my/module.soia:Point",
+                                        "value": "my/module.skir:Point",
                                     },
                                 },
                                 "number": 2,
@@ -1394,7 +1394,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                     },
                     {
                         "kind": "struct",
-                        "id": "my/module.soia:Point",
+                        "id": "my/module.skir:Point",
                         "fields": [
                             {
                                 "name": "x",
@@ -1428,11 +1428,11 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(
             type_descriptor.as_json(),
             {
-                "type": {"kind": "record", "value": "my/module.soia:Primitives"},
+                "type": {"kind": "record", "value": "my/module.skir:Primitives"},
                 "records": [
                     {
                         "kind": "struct",
-                        "id": "my/module.soia:Primitives",
+                        "id": "my/module.skir:Primitives",
                         "fields": [
                             {
                                 "name": "bool",
@@ -1501,7 +1501,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         # Empty struct should encode to wire 246 (0 fields)
         empty_point = Point.partial()
         empty_bytes = Point.serializer.to_bytes(empty_point)
-        self.assertEqual(empty_bytes.hex(), "736f6961f6")  # soia + 246
+        self.assertEqual(empty_bytes.hex(), "736b6972f6")  # skir + 246
 
         # Test roundtrip
         restored = Point.serializer.from_bytes(empty_bytes)
@@ -1516,7 +1516,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         # One field (wire 247)
         one_field = Point.partial(x=1.0)
         one_bytes = Point.serializer.to_bytes(one_field)
-        self.assertTrue(one_bytes.hex().startswith("736f6961f7"))  # soia + 247
+        self.assertTrue(one_bytes.hex().startswith("736b6972f7"))  # skir + 247
         restored_one = Point.serializer.from_bytes(one_bytes)
         self.assertEqual(restored_one.x, 1.0)
         self.assertEqual(restored_one.y, 0.0)
@@ -1526,8 +1526,8 @@ class ModuleInitializerTestCase(unittest.TestCase):
         two_bytes = Point.serializer.to_bytes(two_fields)
         self.assertEqual(two_fields._array_len, 3)
         self.assertTrue(
-            two_bytes, b"soia\xf9\xf0\x00\x00\x80?\x00\xf0\x00\x00\x00@"
-        )  # soia + 249
+            two_bytes, b"skir\xf9\xf0\x00\x00\x80?\x00\xf0\x00\x00\x00@"
+        )  # skir + 249
         restored_two = Point.serializer.from_bytes(two_bytes)
         self.assertEqual(restored_two._array_len, 3)
         self.assertEqual(restored_two.x, 1.0)
@@ -1551,7 +1551,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
             t=Timestamp.from_unix_millis(1000),
         )
         full_bytes = Primitives.serializer.to_bytes(full_struct)
-        self.assertTrue(full_bytes.hex().startswith("736f6961fa"))  # soia + 250
+        self.assertTrue(full_bytes.hex().startswith("736b6972fa"))  # skir + 250
 
         # Test roundtrip
         restored = Primitives.serializer.from_bytes(full_bytes)
@@ -1670,7 +1670,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         default_bytes = Primitives.serializer.to_bytes(default_struct)
 
         # Should encode as empty struct (wire 246)
-        self.assertTrue(default_bytes.hex().startswith("736f6961f6"))
+        self.assertTrue(default_bytes.hex().startswith("736b6972f6"))
 
         restored = Primitives.serializer.from_bytes(default_bytes)
         self.assertEqual(restored.bool, False)
@@ -1871,13 +1871,13 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Test binary encoding for constant fields
         red_bytes = PrimaryColor.serializer.to_bytes(PrimaryColor.RED)
-        self.assertEqual(red_bytes, b"soia\n")
+        self.assertEqual(red_bytes, b"skir\n")
 
         green_bytes = PrimaryColor.serializer.to_bytes(PrimaryColor.GREEN)
-        self.assertTrue(green_bytes, b"soia\x02")
+        self.assertTrue(green_bytes, b"skir\x02")
 
         blue_bytes = PrimaryColor.serializer.to_bytes(PrimaryColor.BLUE)
-        self.assertEqual(blue_bytes, b"soia\x1e")
+        self.assertEqual(blue_bytes, b"skir\x1e")
 
         # Test binary roundtrips
         self.assertEqual(
@@ -1898,7 +1898,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         # Test binary encoding for wrapper field
         error_status = Status.wrap_error("test error")
         error_bytes = Status.serializer.to_bytes(error_status)
-        self.assertTrue(error_bytes.hex().startswith("736f6961"))  # soia prefix
+        self.assertTrue(error_bytes.hex().startswith("736b6972"))  # skir prefix
 
         # Test binary roundtrip
         restored = Status.serializer.from_bytes(error_bytes)
@@ -1949,7 +1949,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         # Test unknown constant
         unknown = PrimaryColor.UNKNOWN
         unknown_bytes = PrimaryColor.serializer.to_bytes(unknown)
-        self.assertTrue(unknown_bytes.hex().startswith("736f6961"))
+        self.assertTrue(unknown_bytes.hex().startswith("736b6972"))
 
         # Roundtrip should return UNKNOWN
         restored = PrimaryColor.serializer.from_bytes(unknown_bytes)

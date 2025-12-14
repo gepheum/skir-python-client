@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Final, cast, final
 
-from soia._impl.never import Never
+from skir._impl.never import Never
 
 
 @final

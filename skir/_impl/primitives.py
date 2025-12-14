@@ -5,8 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, final
 
-from soia import _spec, reflection
-from soia._impl.binary import (
+from skir import _spec, reflection
+from skir._impl.binary import (
     decode_bool,
     decode_float,
     decode_int32,
@@ -19,9 +19,9 @@ from soia._impl.binary import (
     encode_length_prefix,
     encode_uint64,
 )
-from soia._impl.function_maker import Expr, ExprLike
-from soia._impl.timestamp import Timestamp
-from soia._impl.type_adapter import ByteStream, T, TypeAdapter
+from skir._impl.function_maker import Expr, ExprLike
+from skir._impl.timestamp import Timestamp
+from skir._impl.type_adapter import ByteStream, T, TypeAdapter
 
 
 class AbstractPrimitiveAdapter(TypeAdapter[T]):

@@ -3,7 +3,7 @@ import re
 from typing import Any, Final, Mapping, Protocol
 from urllib.parse import urlparse
 
-from soia._impl.method import Method, Request, Response
+from skir._impl.method import Method, Request, Response
 
 
 class ServiceClient:
