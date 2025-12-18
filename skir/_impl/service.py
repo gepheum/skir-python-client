@@ -221,6 +221,7 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
                 "number": method.number,
                 "request": method.request_serializer.type_descriptor.as_json(),
                 "response": method.response_serializer.type_descriptor.as_json(),
+                "docs": method.doc,
             }
 
         json_code = json.dumps(
