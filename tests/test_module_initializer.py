@@ -101,7 +101,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         _spec.Field(
                             name="u64",
                             number=6,
-                            type=_spec.PrimitiveType.UINT64,
+                            type=_spec.PrimitiveType.HASH64,
                         ),
                         _spec.Field(
                             name="s",
@@ -1477,7 +1477,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                             },
                             {
                                 "name": "u64",
-                                "type": {"kind": "primitive", "value": "uint64"},
+                                "type": {"kind": "primitive", "value": "hash64"},
                                 "number": 6,
                             },
                             {
@@ -1740,7 +1740,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
             f64=float("-inf"),
             i32=2147483647,  # max int32
             i64=-9223372036854775808,  # min int64
-            u64=18446744073709551615,  # max uint64
+            u64=18446744073709551615,  # max hash64
             s="\u0000\uffff",  # null char and max unicode
             t=Timestamp.from_unix_millis(-8640000000000000),  # min timestamp
         )

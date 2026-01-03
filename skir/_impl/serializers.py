@@ -27,7 +27,7 @@ def primitive_serializer(primitive: Literal["int32"]) -> Serializer[int]: ...
 @overload
 def primitive_serializer(primitive: Literal["int64"]) -> Serializer[int]: ...
 @overload
-def primitive_serializer(primitive: Literal["uint64"]) -> Serializer[int]: ...
+def primitive_serializer(primitive: Literal["hash64"]) -> Serializer[int]: ...
 @overload
 def primitive_serializer(primitive: Literal["float32"]) -> Serializer[float]: ...
 @overload
@@ -45,7 +45,7 @@ def primitive_serializer(
         Literal["bool"]
         | Literal["int32"]
         | Literal["int64"]
-        | Literal["uint64"]
+        | Literal["hash64"]
         | Literal["float32"]
         | Literal["float64"]
         | Literal["timestamp"]
@@ -67,7 +67,7 @@ _primitive_to_serializer: Final = {
     "bool": make_serializer(primitives.BOOL_ADAPTER),
     "int32": make_serializer(primitives.INT32_ADAPTER),
     "int64": make_serializer(primitives.INT64_ADAPTER),
-    "uint64": make_serializer(primitives.UINT64_ADAPTER),
+    "hash64": make_serializer(primitives.HASH64_ADAPTER),
     "float32": make_serializer(primitives.FLOAT32_ADAPTER),
     "float64": make_serializer(primitives.FLOAT64_ADAPTER),
     "timestamp": make_serializer(primitives.TIMESTAMP_ADAPTER),

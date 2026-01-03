@@ -37,8 +37,8 @@ def init_module(
                 return primitives.STRING_ADAPTER
             elif type == _spec.PrimitiveType.TIMESTAMP:
                 return primitives.TIMESTAMP_ADAPTER
-            elif type == _spec.PrimitiveType.UINT64:
-                return primitives.UINT64_ADAPTER
+            elif type == _spec.PrimitiveType.HASH64:
+                return primitives.HASH64_ADAPTER
         elif isinstance(type, _spec.ArrayType):
             return arrays.get_array_adapter(
                 resolve_type(type.item),

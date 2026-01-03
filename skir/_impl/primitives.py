@@ -9,15 +9,15 @@ from skir import _spec, reflection
 from skir._impl.binary import (
     decode_bool,
     decode_float,
+    decode_hash64,
     decode_int32,
     decode_int64,
-    decode_uint64,
     encode_float32,
     encode_float64,
+    encode_hash64,
     encode_int32,
     encode_int64,
     encode_length_prefix,
-    encode_uint64,
 )
 from skir._impl.function_maker import Expr, ExprLike
 from skir._impl.timestamp import Timestamp
@@ -94,7 +94,7 @@ BOOL_ADAPTER: Final[TypeAdapter[bool]] = _BoolAdapter()
 
 @dataclass(frozen=True)
 class _AbstractIntAdapter(AbstractPrimitiveAdapter[int]):
-    """Type adapter implementation for int32, int64 and uint64."""
+    """Type adapter implementation for int32, int64 and hash64."""
 
     def default_expr(self) -> ExprLike:
         return "0"
@@ -175,7 +175,7 @@ class _Int64Adapter(_AbstractIntAdapter):
         )
 
 
-def _uint64_to_json(i: int) -> int | str:
+def _hash64_to_json(i: int) -> int | str:
     if i <= 0:
         return 0
     elif i <= 9007199254740991:  # max safe integer in JavaScript
@@ -187,28 +187,28 @@ def _uint64_to_json(i: int) -> int | str:
 
 
 @dataclass(frozen=True)
-class _Uint64Adapter(_AbstractIntAdapter):
+class _Hash64Adapter(_AbstractIntAdapter):
     def to_json_expr(self, in_expr: ExprLike, readable: bool) -> Expr:
         return Expr.join(
-            Expr.local("uint64_to_json", _uint64_to_json), "(", in_expr, ")"
+            Expr.local("hash64_to_json", _hash64_to_json), "(", in_expr, ")"
         )
 
     def encode_fn(self) -> Callable[[int, bytearray], None]:
-        return encode_uint64
+        return encode_hash64
 
     def decode_fn(self) -> Callable[[ByteStream], int]:
-        return decode_uint64
+        return decode_hash64
 
     def get_type(self) -> reflection.Type:
         return reflection.PrimitiveType(
             kind="primitive",
-            value="uint64",
+            value="hash64",
         )
 
 
 INT32_ADAPTER: Final[TypeAdapter[int]] = _Int32Adapter()
 INT64_ADAPTER: Final[TypeAdapter[int]] = _Int64Adapter()
-UINT64_ADAPTER: Final[TypeAdapter[int]] = _Uint64Adapter()
+HASH64_ADAPTER: Final[TypeAdapter[int]] = _Hash64Adapter()
 
 
 _SPECIAL_FLOAT_TO_STRING: Final[dict[str, str]] = {

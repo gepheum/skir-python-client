@@ -65,25 +65,25 @@ class SerializersTestCase(unittest.TestCase):
         self.assertEqual(primitive_serializer("int64").from_json_code("-3.14"), -3)
 
         self.assertEqual(
-            primitive_serializer("uint64").to_json_code(2147483648),
+            primitive_serializer("hash64").to_json_code(2147483648),
             "2147483648",
         )
         self.assertEqual(
-            primitive_serializer("uint64").to_json_code(-1),
+            primitive_serializer("hash64").to_json_code(-1),
             "0",
         )
         self.assertEqual(
-            primitive_serializer("uint64").to_json_code(9007199254740991),
+            primitive_serializer("hash64").to_json_code(9007199254740991),
             "9007199254740991",
         )
         self.assertEqual(
-            primitive_serializer("uint64").to_json_code(9007199254740992),
+            primitive_serializer("hash64").to_json_code(9007199254740992),
             '"9007199254740992"',
         )
-        self.assertEqual(primitive_serializer("uint64").from_json_code("0"), 0)
-        self.assertEqual(primitive_serializer("uint64").from_json_code('"7"'), 7)
-        self.assertEqual(primitive_serializer("uint64").from_json_code("3.14"), 3)
-        self.assertEqual(primitive_serializer("uint64").from_json_code("-3.14"), -3)
+        self.assertEqual(primitive_serializer("hash64").from_json_code("0"), 0)
+        self.assertEqual(primitive_serializer("hash64").from_json_code('"7"'), 7)
+        self.assertEqual(primitive_serializer("hash64").from_json_code("3.14"), 3)
+        self.assertEqual(primitive_serializer("hash64").from_json_code("-3.14"), -3)
 
         self.assertEqual(primitive_serializer("float32").to_json_code(3.14), "3.14")
         self.assertEqual(
@@ -233,13 +233,13 @@ class BinarySerializationTestCase(unittest.TestCase):
                 restored = primitive_serializer("int64").from_bytes(result_bytes)
                 self.assertEqual(restored, value)
 
-    def test_uint64_binary_serialization(self):
-        """Test uint64 binary roundtrip."""
+    def test_hash64_binary_serialization(self):
+        """Test hash64 binary roundtrip."""
         values = [0, 1, 42, 18446744073709551615]
         for value in values:
             with self.subTest(value=value):
-                result_bytes = primitive_serializer("uint64").to_bytes(value)
-                restored = primitive_serializer("uint64").from_bytes(result_bytes)
+                result_bytes = primitive_serializer("hash64").to_bytes(value)
+                restored = primitive_serializer("hash64").from_bytes(result_bytes)
                 self.assertEqual(restored, value)
 
     def test_float32_binary_serialization(self):
@@ -525,7 +525,7 @@ class BinarySerializationTestCase(unittest.TestCase):
                 (0, 42, -1, 9223372036854775807),
             ),
             (
-                array_serializer(primitive_serializer("uint64")),
+                array_serializer(primitive_serializer("hash64")),
                 (0, 42, 18446744073709551615),
             ),
             (
@@ -601,10 +601,10 @@ class BinarySerializationTestCase(unittest.TestCase):
         int64_bytes = int64_ser.to_bytes(0)
         self.assertEqual(int64_ser.from_bytes(int64_bytes), 0)
 
-        # Test uint64
-        uint64_ser = primitive_serializer("uint64")
-        uint64_bytes = uint64_ser.to_bytes(0)
-        self.assertEqual(uint64_ser.from_bytes(uint64_bytes), 0)
+        # Test hash64
+        hash64_ser = primitive_serializer("hash64")
+        hash64_bytes = hash64_ser.to_bytes(0)
+        self.assertEqual(hash64_ser.from_bytes(hash64_bytes), 0)
 
         # Test float32
         float32_ser = primitive_serializer("float32")

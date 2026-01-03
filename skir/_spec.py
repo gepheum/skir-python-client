@@ -7,7 +7,7 @@ class PrimitiveType(enum.Enum):
     BOOL = enum.auto()
     INT32 = enum.auto()
     INT64 = enum.auto()
-    UINT64 = enum.auto()
+    HASH64 = enum.auto()
     FLOAT32 = enum.auto()
     FLOAT64 = enum.auto()
     TIMESTAMP = enum.auto()

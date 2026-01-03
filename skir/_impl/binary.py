@@ -50,7 +50,7 @@ def encode_int64(value: int, buffer: bytearray) -> None:
         )
 
 
-def encode_uint64(value: int, buffer: bytearray) -> None:
+def encode_hash64(value: int, buffer: bytearray) -> None:
     if value < 232:
         buffer.append(0 if value <= 0 else value)
     elif value < 65536:
@@ -106,7 +106,7 @@ def make_decode_number_fn(
         "bool",
         "int32",
         "int64",
-        "uint64",
+        "hash64",
         "float",
     ],
 ) -> Callable:
@@ -118,7 +118,7 @@ def make_decode_number_fn(
     elif target_type == "int64":
         target_min_int = -(2**63)
         target_max_int = 2**63 - 1
-    elif target_type == "uint64":
+    elif target_type == "hash64":
         target_min_int = 0
         target_max_int = 2**64 - 1
     else:  # float
@@ -235,7 +235,7 @@ def make_decode_number_fn(
 decode_bool: Final[Callable[[ByteStream], bool]] = make_decode_number_fn("bool")
 decode_int32: Final[Callable[[ByteStream], int]] = make_decode_number_fn("int32")
 decode_int64: Final[Callable[[ByteStream], int]] = make_decode_number_fn("int64")
-decode_uint64: Final[Callable[[ByteStream], int]] = make_decode_number_fn("uint64")
+decode_hash64: Final[Callable[[ByteStream], int]] = make_decode_number_fn("hash64")
 decode_float: Final[Callable[[ByteStream], float]] = make_decode_number_fn("float")
 
 
