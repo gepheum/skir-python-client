@@ -350,11 +350,11 @@ def _get_studio_html(studio_app_js_url: str) -> str:
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>REStudio</title>
+    <title>Skir Studio</title>
     <script src="{escaped_url}"></script>
   </head>
   <body style="margin: 0; padding: 0;">
-    <restudio-app></restudio-app>
+    <skir-studio-app></skir-studio-app>
   </body>
 </html>
 """
