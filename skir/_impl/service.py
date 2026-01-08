@@ -264,8 +264,67 @@ class Service(Generic[RequestMeta]):
 class ServiceAsync(Generic[RequestMeta]):
     """Asynchronous version of Service.
 
+    Usage: call '.add_method()' to register async method implementations, then
+    call 'await .handle_request()' from the async function called by your web
+    framework when an HTTP request is received at your service's endpoint.
+
     The service can be configured by setting properties on the 'options'
     attribute (e.g., error_logger, studio_app_js_url, etc.).
+
+    Example with FastAPI:
+
+        import urllib.parse
+
+        from fastapi import FastAPI, Request, Response
+
+        s = skir.ServiceAsync[dict[str, str]]()
+        s.add_method(...)
+        s.add_method(...)
+
+        app = FastAPI()
+
+        @app.api_route("/myapi", methods=["GET", "POST"])
+        async def myapi(request: Request):
+            if request.method == "POST":
+                req_body = (await request.body()).decode("utf-8")
+            else:
+                req_body = urllib.parse.unquote(
+                    request.url.query.encode("utf-8").decode("utf-8")
+                )
+            req_meta = dict(request.headers)
+            raw_response = await s.handle_request(req_body, req_meta)
+            return Response(
+                content=raw_response.data,
+                status_code=raw_response.status_code,
+                media_type=raw_response.content_type,
+            )
+
+    Example with Litestar:
+
+        import urllib.parse
+
+        from litestar import Litestar, Request, Response, route
+
+        s = skir.ServiceAsync[dict[str, str]]()
+        s.add_method(...)
+        s.add_method(...)
+
+        @route("/myapi", http_method=["GET", "POST"])
+        async def myapi(request: Request) -> Response:
+            if request.method == "POST":
+                req_body = (await request.body()).decode("utf-8")
+            else:
+                query_string = request.scope.get("query_string", b"").decode("utf-8")
+                req_body = urllib.parse.unquote(query_string)
+            req_meta = dict(request.headers)
+            raw_response = await s.handle_request(req_body, req_meta)
+            return Response(
+                content=raw_response.data,
+                status_code=raw_response.status_code,
+                media_type=raw_response.content_type,
+            )
+
+        app = Litestar(route_handlers=[myapi])
     """
 
     _impl: "_ServiceImpl[RequestMeta]"
