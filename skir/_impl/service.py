@@ -1,7 +1,3 @@
-# TODO: export new symbols in skir/__init__.py
-# TODO: declare public symbols first
-# TODO: more integration examples
-
 import html
 import inspect
 import json
@@ -19,15 +15,9 @@ RequestMeta = TypeVar("RequestMeta")
 RequestMeta_contra = TypeVar("RequestMeta_contra", contravariant=True)
 
 
-@dataclass(frozen=True)
-class _MethodImpl(Generic[Request, Response, RequestMeta]):
-    method: Method[Request, Response]
-    impl: Callable[
-        # Parameters
-        [Request, RequestMeta],
-        # Return type
-        Union[Response, Awaitable[Response]],
-    ]
+# ==============================================================================
+# Public API - Types and Exceptions
+# ==============================================================================
 
 
 @dataclass(frozen=True)
@@ -37,59 +27,6 @@ class RawServiceResponse:
     data: str
     status_code: int
     content_type: str
-
-
-def _make_ok_json_response(data: str) -> RawServiceResponse:
-    return RawServiceResponse(
-        data=data,
-        status_code=200,
-        content_type="application/json",
-    )
-
-
-def _make_ok_html_response(data: str) -> RawServiceResponse:
-    return RawServiceResponse(
-        data=data,
-        status_code=200,
-        content_type="text/html; charset=utf-8",
-    )
-
-
-def _make_bad_request_response(data: str) -> RawServiceResponse:
-    return RawServiceResponse(
-        data=data,
-        status_code=400,
-        content_type="text/plain; charset=utf-8",
-    )
-
-
-def _make_server_error_response(
-    data: str, status_code: int = 500
-) -> RawServiceResponse:
-    return RawServiceResponse(
-        data=data,
-        status_code=status_code,
-        content_type="text/plain; charset=utf-8",
-    )
-
-
-def _get_studio_html(studio_app_js_url: str) -> str:
-    # Copied from
-    #   https://github.com/gepheum/skir-studio/blob/main/index.jsdeliver.html
-    escaped_url = html.escape(studio_app_js_url, quote=True)
-    return f"""<!DOCTYPE html>
-
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>RESTudio</title>
-    <script src="{escaped_url}"></script>
-  </head>
-  <body style="margin: 0; padding: 0;">
-    <restudio-app></restudio-app>
-  </body>
-</html>
-"""
 
 
 class ServiceError(Exception):
@@ -161,6 +98,362 @@ class ServiceError(Exception):
             self._message,
             self._status_code,
         )
+
+
+@dataclass(frozen=True)
+class ServiceErrorContext(Generic[RequestMeta]):
+    """Context information about an error that occurred during method execution.
+
+    This dataclass is passed to the error_logger callback whenever an exception
+    is thrown during the handling of a service method call. It provides all the
+    information needed to log the error.
+    """
+
+    error: Exception
+    """The exception that was thrown."""
+
+    method: Method[Any, Any]
+    """The method that was being executed when the error occurred."""
+
+    request: Any
+    """The deserialized request object that was passed to the method."""
+
+    request_meta: RequestMeta
+    """The request metadata (e.g., HTTP headers, authentication info)."""
+
+
+class ServiceOptions(Generic[RequestMeta]):
+    keep_unrecognized_values = False
+    """Whether to keep unrecognized values when deserializing requests.
+
+    **WARNING:** Only enable this for data from trusted sources. Malicious
+    actors could inject fields with IDs not yet defined in your schema. If you
+    preserve this data and later define those IDs in a future schema version,
+    the injected data could be deserialized as valid fields, leading to
+    security vulnerabilities or data corruption.
+
+    Defaults to False.
+    """
+
+    can_send_unknown_error_message: Union[
+        Literal[True, False], Callable[[RequestMeta], bool]
+    ] = False
+    """Predicate that determines whether the message of an unknown error (i.e. not
+    a ServiceError) should be sent to the client.
+
+    By default, unknown errors are masked and the client receives a generic
+    'server error' message with status 500. This is to prevent leaking
+    sensitive information to the client.
+
+    You can enable this for debugging purposes or if you are sure that your
+    error messages are safe to expose.
+    """
+
+    error_logger: Callable[[ServiceErrorContext[RequestMeta]], None]
+    """Callback invoked whenever an error is thrown during method execution.
+
+    Use this to log errors for monitoring, debugging, or alerting purposes.
+    The callback receives the error object, the method being executed, the
+    request that triggered the error, and the request metadata.
+
+    Defaults to a function which logs the method name and error message using
+    the logging module at ERROR level.
+    """
+
+    studio_app_js_url: str
+    """URL to the JavaScript file for the Skir Studio app.
+
+    Skir Studio is a web interface for exploring and testing your Skir service.
+    It is served when the service receives a request at '${serviceUrl}?studio'.
+    """
+
+    def __init__(self):
+        def _default_error_logger(
+            error_context: ServiceErrorContext[RequestMeta],
+        ) -> None:
+            method_name = error_context.method.name
+            error = error_context.error
+            _logger.error(f"Error in method {method_name}: {error}", exc_info=error)
+
+        self.error_logger = _default_error_logger
+        self.studio_app_js_url = (
+            "https://cdn.jsdelivr.net/npm/skir-studio/dist/skir-studio-standalone.js"
+        )
+
+    def _resolve_can_send_unknown_error_message(
+        self,
+        req_meta: RequestMeta,
+    ) -> bool:
+        if isinstance(self.can_send_unknown_error_message, bool):
+            return self.can_send_unknown_error_message
+        else:
+            return self.can_send_unknown_error_message(req_meta)
+
+
+# ==============================================================================
+# Public API - Main Classes
+# ==============================================================================
+
+
+class Service(Generic[RequestMeta]):
+    """Wraps around the implementation of a skir service on the server side.
+
+    Usage: call '.add_method()' to register method implementations, then call
+    '.handle_request()' from the function called by your web framework when an
+    HTTP request is received at your service's endpoint.
+
+    The service can be configured by setting properties on the 'options'
+    attribute (e.g., error_logger, studio_app_js_url, etc.).
+
+    Example with Flask:
+
+        from flask import Response, request
+        from werkzeug.datastructures import Headers
+
+
+        s = skir.Service[Headers]()
+        s.add_method(...)
+        s.add_method(...)
+
+        @app.route("/myapi", methods=["GET", "POST"])
+        def myapi():
+            if request.method == "POST":
+                req_body = request.get_data(as_text=True)
+            else:
+                query_string = request.query_string.decode("utf-8")
+                req_body = urllib.parse.unquote(query_string)
+            req_meta = request.headers
+            raw_response = s.handle_request(req_body, req_meta)
+            return Response(
+                raw_response.data,
+                status=raw_response.status_code,
+                content_type=raw_response.content_type,
+            )
+    """
+
+    _impl: "_ServiceImpl[RequestMeta]"
+    options: Final[ServiceOptions[RequestMeta]]
+
+    def __init__(self):
+        self._impl = _ServiceImpl[RequestMeta]()
+        self.options = ServiceOptions()
+
+    def add_method(
+        self,
+        method: Method[Request, Response],
+        impl: Union[
+            Callable[[Request], Response],
+            Callable[[Request, RequestMeta], Response],
+        ],
+    ) -> "Service[RequestMeta]":
+        self._impl.add_method(method, impl)
+        return self
+
+    def handle_request(
+        self,
+        req_body: str,
+        req_meta: RequestMeta,
+    ) -> RawServiceResponse:
+        return self._impl.handle_request(
+            req_body,
+            req_meta,
+            self.options,
+        )
+
+
+class ServiceAsync(Generic[RequestMeta]):
+    """Asynchronous version of Service.
+
+    The service can be configured by setting properties on the 'options'
+    attribute (e.g., error_logger, studio_app_js_url, etc.).
+    """
+
+    _impl: "_ServiceImpl[RequestMeta]"
+    options: Final[ServiceOptions[RequestMeta]]
+
+    def __init__(self):
+        self._impl = _ServiceImpl[RequestMeta]()
+        self.options = ServiceOptions()
+
+    def add_method(
+        self,
+        method: Method[Request, Response],
+        impl: Union[
+            # Sync
+            Callable[[Request], Response],
+            Callable[[Request, RequestMeta], Response],
+            # Async
+            Callable[[Request], Awaitable[Response]],
+            Callable[[Request, RequestMeta], Awaitable[Response]],
+        ],
+    ) -> "ServiceAsync[RequestMeta]":
+        self._impl.add_method(method, impl)
+        return self
+
+    async def handle_request(
+        self,
+        req_body: str,
+        req_meta: RequestMeta,
+    ) -> RawServiceResponse:
+        return await self._impl.handle_request_async(
+            req_body,
+            req_meta,
+            self.options,
+        )
+
+
+# ==============================================================================
+# Private Implementation - Helper Functions
+# ==============================================================================
+
+
+def _make_ok_json_response(data: str) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=200,
+        content_type="application/json",
+    )
+
+
+def _make_ok_html_response(data: str) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=200,
+        content_type="text/html; charset=utf-8",
+    )
+
+
+def _make_bad_request_response(data: str) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=400,
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+def _make_server_error_response(
+    data: str, status_code: int = 500
+) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=status_code,
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+def _get_studio_html(studio_app_js_url: str) -> str:
+    # Copied from
+    #   https://github.com/gepheum/skir-studio/blob/main/index.jsdeliver.html
+    escaped_url = html.escape(studio_app_js_url, quote=True)
+    return f"""<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>REStudio</title>
+    <script src="{escaped_url}"></script>
+  </head>
+  <body style="margin: 0; padding: 0;">
+    <restudio-app></restudio-app>
+  </body>
+</html>
+"""
+
+
+# ==============================================================================
+# Private Implementation - Core Classes
+# ==============================================================================
+
+
+@dataclass(frozen=True)
+class _MethodImpl(Generic[Request, Response, RequestMeta]):
+    method: Method[Request, Response]
+    impl: Callable[
+        # Parameters
+        [Request, RequestMeta],
+        # Return type
+        Union[Response, Awaitable[Response]],
+    ]
+
+
+class _ServiceImpl(Generic[RequestMeta]):
+    _number_to_method_impl: dict[int, _MethodImpl[Any, Any, RequestMeta]]
+
+    def __init__(self):
+        self._number_to_method_impl = {}
+
+    def add_method(
+        self,
+        method: Method[Request, Response],
+        impl: Union[
+            # Sync
+            Callable[[Request], Response],
+            Callable[[Request, RequestMeta], Response],
+            # Async
+            Callable[[Request], Awaitable[Response]],
+            Callable[[Request, RequestMeta], Awaitable[Response]],
+        ],
+    ) -> None:
+        signature = inspect.Signature.from_callable(impl)
+        num_positional_params = 0
+        for param in signature.parameters.values():
+            if param.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.POSITIONAL_ONLY,
+            ):
+                num_positional_params += 1
+            if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                raise ValueError("Method implementation cannot accept *args")
+        if num_positional_params not in range(1, 3):
+            raise ValueError(
+                "Method implementation must accept 1 or 2 positional parameters"
+            )
+
+        def resolved_impl(req: Request, req_meta: RequestMeta) -> Response:
+            if num_positional_params == 1:
+                return cast(Callable[[Request], Response], impl)(req)
+            else:
+                return cast(Callable[[Request, RequestMeta], Response], impl)(
+                    req, req_meta
+                )
+
+        number = method.number
+        if number in self._number_to_method_impl:
+            raise ValueError(
+                f"Method with the same number already registered ({number})"
+            )
+        self._number_to_method_impl[number] = _MethodImpl(
+            method=method,
+            impl=resolved_impl,
+        )
+
+    def handle_request(
+        self,
+        req_body: str,
+        req_meta: RequestMeta,
+        options: "ServiceOptions[RequestMeta]",
+    ) -> RawServiceResponse:
+        flow = _HandleRequestFlow(
+            req_body=req_body,
+            req_meta=req_meta,
+            number_to_method_impl=self._number_to_method_impl,
+            options=options,
+        )
+        return flow.run()
+
+    async def handle_request_async(
+        self,
+        req_body: str,
+        req_meta: RequestMeta,
+        options: "ServiceOptions[RequestMeta]",
+    ) -> RawServiceResponse:
+        flow = _HandleRequestFlow(
+            req_body=req_body,
+            req_meta=req_meta,
+            number_to_method_impl=self._number_to_method_impl,
+            options=options,
+        )
+        return await flow.run_async()
 
 
 @dataclass()
@@ -375,271 +668,3 @@ class _HandleRequestFlow(Generic[Request, Response, RequestMeta]):
                 f"server error: can't serialize response to JSON: {e}"
             )
         return _make_ok_json_response(res_json)
-
-
-class _ServiceImpl(Generic[RequestMeta]):
-    _number_to_method_impl: dict[int, _MethodImpl[Any, Any, RequestMeta]]
-
-    def __init__(self):
-        self._number_to_method_impl = {}
-
-    def add_method(
-        self,
-        method: Method[Request, Response],
-        impl: Union[
-            # Sync
-            Callable[[Request], Response],
-            Callable[[Request, RequestMeta], Response],
-            # Async
-            Callable[[Request], Awaitable[Response]],
-            Callable[[Request, RequestMeta], Awaitable[Response]],
-        ],
-    ) -> None:
-        signature = inspect.Signature.from_callable(impl)
-        num_positional_params = 0
-        for param in signature.parameters.values():
-            if param.kind in (
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.POSITIONAL_ONLY,
-            ):
-                num_positional_params += 1
-            if param.kind == inspect.Parameter.VAR_POSITIONAL:
-                raise ValueError("Method implementation cannot accept *args")
-        if num_positional_params not in range(1, 3):
-            raise ValueError(
-                "Method implementation must accept 1 or 2 positional parameters"
-            )
-
-        def resolved_impl(req: Request, req_meta: RequestMeta) -> Response:
-            if num_positional_params == 1:
-                return cast(Callable[[Request], Response], impl)(req)
-            else:
-                return cast(Callable[[Request, RequestMeta], Response], impl)(
-                    req, req_meta
-                )
-
-        number = method.number
-        if number in self._number_to_method_impl:
-            raise ValueError(
-                f"Method with the same number already registered ({number})"
-            )
-        self._number_to_method_impl[number] = _MethodImpl(
-            method=method,
-            impl=resolved_impl,
-        )
-
-    def handle_request(
-        self,
-        req_body: str,
-        req_meta: RequestMeta,
-        options: "ServiceOptions[RequestMeta]",
-    ) -> RawServiceResponse:
-        flow = _HandleRequestFlow(
-            req_body=req_body,
-            req_meta=req_meta,
-            number_to_method_impl=self._number_to_method_impl,
-            options=options,
-        )
-        return flow.run()
-
-    async def handle_request_async(
-        self,
-        req_body: str,
-        req_meta: RequestMeta,
-        options: "ServiceOptions[RequestMeta]",
-    ) -> RawServiceResponse:
-        flow = _HandleRequestFlow(
-            req_body=req_body,
-            req_meta=req_meta,
-            number_to_method_impl=self._number_to_method_impl,
-            options=options,
-        )
-        return await flow.run_async()
-
-
-@dataclass(frozen=True)
-class ServiceErrorContext(Generic[RequestMeta]):
-    """Context information about an error that occurred during method execution.
-
-    This dataclass is passed to the error_logger callback whenever an exception
-    is thrown during the handling of a service method call. It provides all the
-    information needed to log the error.
-    """
-
-    error: Exception
-    """The exception that was thrown."""
-
-    method: Method[Any, Any]
-    """The method that was being executed when the error occurred."""
-
-    request: Any
-    """The deserialized request object that was passed to the method."""
-
-    request_meta: RequestMeta
-    """The request metadata (e.g., HTTP headers, authentication info)."""
-
-
-class ServiceOptions(Generic[RequestMeta]):
-    keep_unrecognized_values = False
-    """Whether to keep unrecognized values when deserializing requests.
-
-    **WARNING:** Only enable this for data from trusted sources. Malicious
-    actors could inject fields with IDs not yet defined in your schema. If you
-    preserve this data and later define those IDs in a future schema version,
-    the injected data could be deserialized as valid fields, leading to
-    security vulnerabilities or data corruption.
-
-    Defaults to False.
-    """
-
-    can_send_unknown_error_message: Union[
-        Literal[True, False], Callable[[RequestMeta], bool]
-    ] = False
-    """Predicate that determines whether the message of an unknown error (i.e. not
-    a ServiceError) should be sent to the client.
-
-    By default, unknown errors are masked and the client receives a generic
-    'server error' message with status 500. This is to prevent leaking
-    sensitive information to the client.
-
-    You can enable this for debugging purposes or if you are sure that your
-    error messages are safe to expose.
-    """
-
-    error_logger: Callable[[ServiceErrorContext[RequestMeta]], None]
-    """Callback invoked whenever an error is thrown during method execution.
-
-    Use this to log errors for monitoring, debugging, or alerting purposes.
-    The callback receives the error object, the method being executed, the
-    request that triggered the error, and the request metadata.
-
-    Defaults to a function which logs the method name and error message using
-    the logging module at ERROR level.
-    """
-
-    studio_app_js_url: str
-    """URL to the JavaScript file for the Skir Studio app.
-
-    Skir Studio is a web interface for exploring and testing your Skir service.
-    It is served when the service receives a request at '${serviceUrl}?studio'.
-    """
-
-    def __init__(self):
-        def _default_error_logger(
-            error_context: ServiceErrorContext[RequestMeta],
-        ) -> None:
-            method_name = error_context.method.name
-            error = error_context.error
-            _logger.error(f"Error in method {method_name}: {error}", exc_info=error)
-
-        self.error_logger = _default_error_logger
-        self.studio_app_js_url = (
-            "https://cdn.jsdelivr.net/npm/skir-studio/dist/skir-studio-standalone.js"
-        )
-
-    def _resolve_can_send_unknown_error_message(
-        self,
-        req_meta: RequestMeta,
-    ) -> bool:
-        if isinstance(self.can_send_unknown_error_message, bool):
-            return self.can_send_unknown_error_message
-        else:
-            return self.can_send_unknown_error_message(req_meta)
-
-
-class Service(Generic[RequestMeta]):
-    """Wraps around the implementation of a skir service on the server side.
-
-    Usage: call '.add_method()' to register method implementations, then call
-    '.handle_request()' from the function called by your web framework when an
-    HTTP request is received at your service's endpoint.
-
-    Example with Flask:
-
-        from flask import Response, request
-        from werkzeug.datastructures import Headers
-
-
-        s = skir.Service[Headers]()
-        s.add_method(...)
-        s.add_method(...)
-
-        @app.route("/myapi", methods=["GET", "POST"])
-        def myapi():
-            if request.method == "POST":
-                req_body = request.get_data(as_text=True)
-            else:
-                query_string = request.query_string.decode("utf-8")
-                req_body = urllib.parse.unquote(query_string)
-            req_meta = request.headers
-            raw_response = s.handle_request(req_body, req_meta)
-            return Response(
-                raw_response.data,
-                status=raw_response.status_code,
-                content_type=raw_response.content_type,
-            )
-    """
-
-    _impl: _ServiceImpl[RequestMeta]
-    options: Final[ServiceOptions[RequestMeta]]
-
-    def __init__(self):
-        self._impl = _ServiceImpl[RequestMeta]()
-        self.options = ServiceOptions()
-
-    def add_method(
-        self,
-        method: Method[Request, Response],
-        impl: Union[
-            Callable[[Request], Response],
-            Callable[[Request, RequestMeta], Response],
-        ],
-    ) -> "Service[RequestMeta]":
-        self._impl.add_method(method, impl)
-        return self
-
-    def handle_request(
-        self,
-        req_body: str,
-        req_meta: RequestMeta,
-    ) -> RawServiceResponse:
-        return self._impl.handle_request(
-            req_body,
-            req_meta,
-            self.options,
-        )
-
-
-class ServiceAsync(Generic[RequestMeta]):
-    _impl: _ServiceImpl[RequestMeta]
-    options: Final[ServiceOptions[RequestMeta]]
-
-    def __init__(self):
-        self._impl = _ServiceImpl[RequestMeta]()
-        self.options = ServiceOptions()
-
-    def add_method(
-        self,
-        method: Method[Request, Response],
-        impl: Union[
-            # Sync
-            Callable[[Request], Response],
-            Callable[[Request, RequestMeta], Response],
-            # Async
-            Callable[[Request], Awaitable[Response]],
-            Callable[[Request, RequestMeta], Awaitable[Response]],
-        ],
-    ) -> "ServiceAsync[RequestMeta]":
-        self._impl.add_method(method, impl)
-        return self
-
-    async def handle_request(
-        self,
-        req_body: str,
-        req_meta: RequestMeta,
-    ) -> RawServiceResponse:
-        return await self._impl.handle_request_async(
-            req_body,
-            req_meta,
-            self.options,
-        )
