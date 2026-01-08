@@ -9,7 +9,7 @@ from skir._impl.serializers import (
     optional_serializer,
     primitive_serializer,
 )
-from skir._impl.service import RawServiceResponse, Service, ServiceAsync
+from skir._impl.service import RawServiceResponse, Service, ServiceAsync, ServiceError
 from skir._impl.service_client import ServiceClient
 from skir._impl.timestamp import Timestamp
 
@@ -26,6 +26,7 @@ __all__ = [
     "Service",
     "ServiceAsync",
     "ServiceClient",
+    "ServiceError",
     "Timestamp",
     "array_serializer",
     "optional_serializer",

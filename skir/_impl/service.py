@@ -1,23 +1,30 @@
+# TODO: export new symbols in skir/__init__.py
+# TODO: declare public symbols first
+# TODO: more integration examples
+
+import html
 import inspect
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar, Union, cast
+from typing import Any, Final, Generic, Literal, TypeVar, Union, cast
 
 from skir._impl.method import Method, Request, Response
 from skir._impl.never import Never
 
-RequestHeaders = TypeVar("RequestHeaders")
+_logger = logging.getLogger(__name__)
 
-ResponseHeaders = TypeVar("ResponseHeaders")
+RequestMeta = TypeVar("RequestMeta")
+RequestMeta_contra = TypeVar("RequestMeta_contra", contravariant=True)
 
 
 @dataclass(frozen=True)
-class _MethodImpl(Generic[Request, Response, RequestHeaders, ResponseHeaders]):
+class _MethodImpl(Generic[Request, Response, RequestMeta]):
     method: Method[Request, Response]
     impl: Callable[
         # Parameters
-        [Request, RequestHeaders, ResponseHeaders],
+        [Request, RequestMeta],
         # Return type
         Union[Response, Awaitable[Response]],
     ]
@@ -25,43 +32,58 @@ class _MethodImpl(Generic[Request, Response, RequestHeaders, ResponseHeaders]):
 
 @dataclass(frozen=True)
 class RawServiceResponse:
+    """Raw response returned by the server."""
+
     data: str
-    type: Literal["ok-json", "ok-html", "bad-request", "server-error"]
-
-    @property
-    def status_code(self):
-        if self.type == "ok-json" or self.type == "ok-html":
-            return 200
-        elif self.type == "bad-request":
-            return 400
-        elif self.type == "server-error":
-            return 500
-        else:
-            _: Never = self.type
-            raise TypeError(f"Unknown response type: {self.type}")
-
-    @property
-    def content_type(self):
-        if self.type == "ok-json":
-            return "application/json"
-        if self.type == "ok-html":
-            return "text/html; charset=utf-8"
-        elif self.type == "bad-request" or self.type == "server-error":
-            return "text/plain; charset=utf-8"
-        else:
-            _: Never = self.type
-            raise TypeError(f"Unknown response type: {self.type}")
+    status_code: int
+    content_type: str
 
 
-# Copied from
-#   https://github.com/gepheum/restudio/blob/main/index.jsdeliver.html
-_RESTUDIO_HTML = """<!DOCTYPE html>
+def _make_ok_json_response(data: str) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=200,
+        content_type="application/json",
+    )
+
+
+def _make_ok_html_response(data: str) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=200,
+        content_type="text/html; charset=utf-8",
+    )
+
+
+def _make_bad_request_response(data: str) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=400,
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+def _make_server_error_response(
+    data: str, status_code: int = 500
+) -> RawServiceResponse:
+    return RawServiceResponse(
+        data=data,
+        status_code=status_code,
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+def _get_studio_html(studio_app_js_url: str) -> str:
+    # Copied from
+    #   https://github.com/gepheum/skir-studio/blob/main/index.jsdeliver.html
+    escaped_url = html.escape(studio_app_js_url, quote=True)
+    return f"""<!DOCTYPE html>
 
 <html>
   <head>
     <meta charset="utf-8" />
     <title>RESTudio</title>
-    <script src="https://cdn.jsdelivr.net/npm/restudio/dist/restudio-standalone.js"></script>
+    <script src="{escaped_url}"></script>
   </head>
   <body style="margin: 0; padding: 0;">
     <restudio-app></restudio-app>
@@ -70,14 +92,83 @@ _RESTUDIO_HTML = """<!DOCTYPE html>
 """
 
 
+class ServiceError(Exception):
+    """If this error is thrown from a method implementation, the specified
+    status code and message will be returned in the HTTP response.
+
+    If any other type of exception is thrown, the response status code will be
+    500 (Internal Server Error).
+    """
+
+    _status_code: Final[int]
+    _message: Final[str]
+
+    def __init__(
+        self,
+        status_code: Literal[
+            "400: Bad Request",
+            "401: Unauthorized",
+            "402: Payment Required",
+            "403: Forbidden",
+            "404: Not Found",
+            "405: Method Not Allowed",
+            "406: Not Acceptable",
+            "407: Proxy Authentication Required",
+            "408: Request Timeout",
+            "409: Conflict",
+            "410: Gone",
+            "411: Length Required",
+            "412: Precondition Failed",
+            "413: Content Too Large",
+            "414: URI Too Long",
+            "415: Unsupported Media Type",
+            "416: Range Not Satisfiable",
+            "417: Expectation Failed",
+            "418: I'm a teapot",
+            "421: Misdirected Request",
+            "422: Unprocessable Content",
+            "423: Locked",
+            "424: Failed Dependency",
+            "425: Too Early",
+            "426: Upgrade Required",
+            "428: Precondition Required",
+            "429: Too Many Requests",
+            "431: Request Header Fields Too Large",
+            "451: Unavailable For Legal Reasons",
+            "500: Internal Server Error",
+            "501: Not Implemented",
+            "502: Bad Gateway",
+            "503: Service Unavailable",
+            "504: Gateway Timeout",
+            "505: HTTP Version Not Supported",
+            "506: Variant Also Negotiates",
+            "507: Insufficient Storage",
+            "508: Loop Detected",
+            "510: Not Extended",
+            "511: Network Authentication Required",
+        ],
+        message: str | None = None,
+    ):
+        parts = status_code.split(": ", 1)
+        if len(parts) != 2:
+            raise ValueError("Invalid status code format")
+        self._status_code = int(parts[0])
+        self._message = message or parts[1]
+        super().__init__(message)
+
+    def to_raw_response(self) -> RawServiceResponse:
+        return _make_server_error_response(
+            self._message,
+            self._status_code,
+        )
+
+
 @dataclass()
-class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHeaders]):
+class _HandleRequestFlow(Generic[Request, Response, RequestMeta]):
     req_body: str
-    req_headers: RequestHeaders
-    res_headers: ResponseHeaders
-    number_to_method_impl: dict[
-        int, _MethodImpl[Any, Any, RequestHeaders, ResponseHeaders]
-    ]
+    req_meta: RequestMeta
+    number_to_method_impl: dict[int, _MethodImpl[Any, Any, RequestMeta]]
+    options: "ServiceOptions[RequestMeta]"
     _format: str = ""
 
     def run(self) -> RawServiceResponse:
@@ -86,9 +177,26 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             return req_impl_pair_or_raw_response
         req, method_impl = req_impl_pair_or_raw_response
         try:
-            res = method_impl.impl(req, self.req_headers, self.res_headers)
+            res = method_impl.impl(req, self.req_meta)
         except Exception as e:
-            return RawServiceResponse(f"server error: {e}", "server-error")
+            error_context = ServiceErrorContext(
+                error=e,
+                method=method_impl.method,
+                request=req,
+                request_meta=self.req_meta,
+            )
+            self.options.error_logger(error_context)
+            if isinstance(e, ServiceError):
+                return e.to_raw_response()
+            else:
+                message = (
+                    f"server error: {e}"
+                    if self.options._resolve_can_send_unknown_error_message(
+                        self.req_meta
+                    )
+                    else "server error"
+                )
+                return _make_server_error_response(message)
         if inspect.isawaitable(res):
             raise TypeError("Method implementation must be synchronous")
         return self._response_to_json(res, method_impl)
@@ -99,24 +207,41 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             return req_impl_pair_or_raw_response
         req, method_impl = req_impl_pair_or_raw_response
         try:
-            res: Any = method_impl.impl(req, self.req_headers, self.res_headers)
+            res: Any = method_impl.impl(req, self.req_meta)
             if inspect.isawaitable(res):
                 res = await res
         except Exception as e:
-            return RawServiceResponse(f"server error: {e}", "server-error")
+            error_context = ServiceErrorContext(
+                error=e,
+                method=method_impl.method,
+                request=req,
+                request_meta=self.req_meta,
+            )
+            self.options.error_logger(error_context)
+            if isinstance(e, ServiceError):
+                return e.to_raw_response()
+            else:
+                message = (
+                    f"server error: {e}"
+                    if self.options._resolve_can_send_unknown_error_message(
+                        self.req_meta
+                    )
+                    else "server error"
+                )
+                return _make_server_error_response(message)
         return self._response_to_json(res, method_impl)
 
     def _parse_request(
         self,
     ) -> Union[
-        tuple[Any, _MethodImpl[Request, Response, RequestHeaders, ResponseHeaders]],
+        tuple[Any, _MethodImpl[Request, Response, RequestMeta]],
         RawServiceResponse,
     ]:
         if self.req_body in ("", "list"):
             return self._handle_list()
 
-        if self.req_body in ("debug", "restudio"):
-            return self._handle_restudio()
+        if self.req_body == "studio":
+            return self._handle_studio()
 
         # Method invokation
         method_name: str
@@ -130,11 +255,11 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             try:
                 req_body_json = json.loads(self.req_body)
             except json.JSONDecodeError:
-                return RawServiceResponse("bad request: invalid JSON", "bad-request")
+                return _make_bad_request_response("bad request: invalid JSON")
             method = req_body_json.get("method", ())
             if method == ():
-                return RawServiceResponse(
-                    "bad request: missing 'method' field in JSON", "bad-request"
+                return _make_bad_request_response(
+                    "bad request: missing 'method' field in JSON"
                 )
             if isinstance(method, str):
                 method_name = method
@@ -143,24 +268,21 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
                 method_name = "?"
                 method_number = method
             else:
-                return RawServiceResponse(
-                    "bad request: 'method' field must be a string or an integer",
-                    "bad-request",
+                return _make_bad_request_response(
+                    "bad request: 'method' field must be a string or an integer"
                 )
             format = "readable"
             data = req_body_json.get("request", ())
             if data == ():
-                return RawServiceResponse(
-                    "bad request: missing 'request' field in JSON", "bad-request"
+                return _make_bad_request_response(
+                    "bad request: missing 'request' field in JSON"
                 )
             request_data = ("json", data)
         else:
             # A colon-separated string
             parts = self.req_body.split(":", 3)
             if len(parts) != 4:
-                return RawServiceResponse(
-                    "bad request: invalid request format", "bad-request"
-                )
+                return _make_bad_request_response("bad request: invalid request format")
             method_name = parts[0]
             method_number_str = parts[1]
             format = parts[2]
@@ -169,8 +291,8 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
                 try:
                     method_number = int(method_number_str)
                 except Exception:
-                    return RawServiceResponse(
-                        "bad request: can't parse method number", "bad-request"
+                    return _make_bad_request_response(
+                        "bad request: can't parse method number"
                     )
             else:
                 method_number = None
@@ -180,38 +302,39 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             all_methods = self.number_to_method_impl.values()
             name_matches = [m for m in all_methods if m.method.name == method_name]
             if not name_matches:
-                return RawServiceResponse(
-                    f"bad request: method not found: {method_name}",
-                    "bad-request",
+                return _make_bad_request_response(
+                    f"bad request: method not found: {method_name}"
                 )
             elif len(name_matches) != 1:
-                return RawServiceResponse(
+                return _make_bad_request_response(
                     f"bad request: method name '{method_name}' is ambiguous; "
-                    "use method number instead",
-                    "bad-request",
+                    "use method number instead"
                 )
             method_number = name_matches[0].method.number
         method_impl = self.number_to_method_impl.get(method_number)
         if not method_impl:
-            return RawServiceResponse(
-                f"bad request: method not found: {method_name}; number: {method_number}",
-                "bad-request",
+            return _make_bad_request_response(
+                f"bad request: method not found: {method_name}; number: {method_number}"
             )
         try:
             req: Any
             request_serializer = method_impl.method.request_serializer
             if request_data[0] == "json-code":
-                req = request_serializer.from_json_code(request_data[1])
+                req = request_serializer.from_json_code(
+                    request_data[1],
+                    keep_unrecognized_values=self.options.keep_unrecognized_values,
+                )
             elif request_data[0] == "json":
-                req = request_serializer.from_json(request_data[1])
+                req = request_serializer.from_json(
+                    request_data[1],
+                    keep_unrecognized_values=self.options.keep_unrecognized_values,
+                )
             else:
                 _: Never = request_data[0]
                 del _
                 req = None  # To please the type checker
         except Exception as e:
-            return RawServiceResponse(
-                f"bad request: can't parse JSON: {e}", "bad-request"
-            )
+            return _make_bad_request_response(f"bad request: can't parse JSON: {e}")
         return (req, method_impl)
 
     def _handle_list(self) -> RawServiceResponse:
@@ -233,31 +356,29 @@ class _HandleRequestFlow(Generic[Request, Response, RequestHeaders, ResponseHead
             },
             indent=2,
         )
-        return RawServiceResponse(json_code, "ok-json")
+        return _make_ok_json_response(json_code)
 
-    def _handle_restudio(self) -> RawServiceResponse:
-        return RawServiceResponse(_RESTUDIO_HTML, "ok-html")
+    def _handle_studio(self) -> RawServiceResponse:
+        return _make_ok_html_response(_get_studio_html(self.options.studio_app_js_url))
 
     def _response_to_json(
         self,
         res: Response,
-        method_impl: _MethodImpl[Request, Response, RequestHeaders, ResponseHeaders],
+        method_impl: _MethodImpl[Request, Response, RequestMeta],
     ) -> RawServiceResponse:
         try:
             res_json = method_impl.method.response_serializer.to_json_code(
                 res, readable=(self.format == "readable")
             )
         except Exception as e:
-            return RawServiceResponse(
-                f"server error: can't serialize response to JSON: {e}", "server-error"
+            return _make_server_error_response(
+                f"server error: can't serialize response to JSON: {e}"
             )
-        return RawServiceResponse(res_json, "ok-json")
+        return _make_ok_json_response(res_json)
 
 
-class _ServiceImpl(Generic[RequestHeaders, ResponseHeaders]):
-    _number_to_method_impl: dict[
-        int, _MethodImpl[Any, Any, RequestHeaders, ResponseHeaders]
-    ]
+class _ServiceImpl(Generic[RequestMeta]):
+    _number_to_method_impl: dict[int, _MethodImpl[Any, Any, RequestMeta]]
 
     def __init__(self):
         self._number_to_method_impl = {}
@@ -268,12 +389,10 @@ class _ServiceImpl(Generic[RequestHeaders, ResponseHeaders]):
         impl: Union[
             # Sync
             Callable[[Request], Response],
-            Callable[[Request, RequestHeaders], Response],
-            Callable[[Request, RequestHeaders, ResponseHeaders], Response],
+            Callable[[Request, RequestMeta], Response],
             # Async
             Callable[[Request], Awaitable[Response]],
-            Callable[[Request, RequestHeaders], Awaitable[Response]],
-            Callable[[Request, RequestHeaders, ResponseHeaders], Awaitable[Response]],
+            Callable[[Request, RequestMeta], Awaitable[Response]],
         ],
     ) -> None:
         signature = inspect.Signature.from_callable(impl)
@@ -286,24 +405,18 @@ class _ServiceImpl(Generic[RequestHeaders, ResponseHeaders]):
                 num_positional_params += 1
             if param.kind == inspect.Parameter.VAR_POSITIONAL:
                 raise ValueError("Method implementation cannot accept *args")
-        if num_positional_params not in range(1, 4):
+        if num_positional_params not in range(1, 3):
             raise ValueError(
-                "Method implementation must accept 1 to 3 positional parameters"
+                "Method implementation must accept 1 or 2 positional parameters"
             )
 
-        def resolved_impl(
-            req: Request, req_headers: RequestHeaders, res_headers: ResponseHeaders
-        ) -> Response:
+        def resolved_impl(req: Request, req_meta: RequestMeta) -> Response:
             if num_positional_params == 1:
                 return cast(Callable[[Request], Response], impl)(req)
-            elif num_positional_params == 2:
-                return cast(Callable[[Request, RequestHeaders], Response], impl)(
-                    req, req_headers
-                )
             else:
-                return cast(
-                    Callable[[Request, RequestHeaders, ResponseHeaders], Response], impl
-                )(req, req_headers, res_headers)
+                return cast(Callable[[Request, RequestMeta], Response], impl)(
+                    req, req_meta
+                )
 
         number = method.number
         if number in self._number_to_method_impl:
@@ -318,33 +431,123 @@ class _ServiceImpl(Generic[RequestHeaders, ResponseHeaders]):
     def handle_request(
         self,
         req_body: str,
-        req_headers: RequestHeaders,
-        res_headers: ResponseHeaders,
+        req_meta: RequestMeta,
+        options: "ServiceOptions[RequestMeta]",
     ) -> RawServiceResponse:
         flow = _HandleRequestFlow(
             req_body=req_body,
-            req_headers=req_headers,
-            res_headers=res_headers,
+            req_meta=req_meta,
             number_to_method_impl=self._number_to_method_impl,
+            options=options,
         )
         return flow.run()
 
     async def handle_request_async(
         self,
         req_body: str,
-        req_headers: RequestHeaders,
-        res_headers: ResponseHeaders,
+        req_meta: RequestMeta,
+        options: "ServiceOptions[RequestMeta]",
     ) -> RawServiceResponse:
         flow = _HandleRequestFlow(
             req_body=req_body,
-            req_headers=req_headers,
-            res_headers=res_headers,
+            req_meta=req_meta,
             number_to_method_impl=self._number_to_method_impl,
+            options=options,
         )
         return await flow.run_async()
 
 
-class Service(Generic[RequestHeaders, ResponseHeaders]):
+@dataclass(frozen=True)
+class ServiceErrorContext(Generic[RequestMeta]):
+    """Context information about an error that occurred during method execution.
+
+    This dataclass is passed to the error_logger callback whenever an exception
+    is thrown during the handling of a service method call. It provides all the
+    information needed to log the error.
+    """
+
+    error: Exception
+    """The exception that was thrown."""
+
+    method: Method[Any, Any]
+    """The method that was being executed when the error occurred."""
+
+    request: Any
+    """The deserialized request object that was passed to the method."""
+
+    request_meta: RequestMeta
+    """The request metadata (e.g., HTTP headers, authentication info)."""
+
+
+class ServiceOptions(Generic[RequestMeta]):
+    keep_unrecognized_values = False
+    """Whether to keep unrecognized values when deserializing requests.
+
+    **WARNING:** Only enable this for data from trusted sources. Malicious
+    actors could inject fields with IDs not yet defined in your schema. If you
+    preserve this data and later define those IDs in a future schema version,
+    the injected data could be deserialized as valid fields, leading to
+    security vulnerabilities or data corruption.
+
+    Defaults to False.
+    """
+
+    can_send_unknown_error_message: Union[
+        Literal[True, False], Callable[[RequestMeta], bool]
+    ] = False
+    """Predicate that determines whether the message of an unknown error (i.e. not
+    a ServiceError) should be sent to the client.
+
+    By default, unknown errors are masked and the client receives a generic
+    'server error' message with status 500. This is to prevent leaking
+    sensitive information to the client.
+
+    You can enable this for debugging purposes or if you are sure that your
+    error messages are safe to expose.
+    """
+
+    error_logger: Callable[[ServiceErrorContext[RequestMeta]], None]
+    """Callback invoked whenever an error is thrown during method execution.
+
+    Use this to log errors for monitoring, debugging, or alerting purposes.
+    The callback receives the error object, the method being executed, the
+    request that triggered the error, and the request metadata.
+
+    Defaults to a function which logs the method name and error message using
+    the logging module at ERROR level.
+    """
+
+    studio_app_js_url: str
+    """URL to the JavaScript file for the Skir Studio app.
+
+    Skir Studio is a web interface for exploring and testing your Skir service.
+    It is served when the service receives a request at '${serviceUrl}?studio'.
+    """
+
+    def __init__(self):
+        def _default_error_logger(
+            error_context: ServiceErrorContext[RequestMeta],
+        ) -> None:
+            method_name = error_context.method.name
+            error = error_context.error
+            _logger.error(f"Error in method {method_name}: {error}", exc_info=error)
+
+        self.error_logger = _default_error_logger
+        self.studio_app_js_url = (
+            "https://cdn.jsdelivr.net/npm/skir-studio/dist/skir-studio-standalone.js"
+        )
+
+    def _resolve_can_send_unknown_error_message(
+        self,
+        req_meta: RequestMeta,
+    ) -> bool:
+        if isinstance(self.can_send_unknown_error_message, bool):
+            return self.can_send_unknown_error_message
+        else:
+            return self.can_send_unknown_error_message(req_meta)
+
+
+class Service(Generic[RequestMeta]):
     """Wraps around the implementation of a skir service on the server side.
 
     Usage: call '.add_method()' to register method implementations, then call
@@ -357,7 +560,7 @@ class Service(Generic[RequestHeaders, ResponseHeaders]):
         from werkzeug.datastructures import Headers
 
 
-        s = skir.Service[Headers, Headers]()
+        s = skir.Service[Headers]()
         s.add_method(...)
         s.add_method(...)
 
@@ -368,47 +571,52 @@ class Service(Generic[RequestHeaders, ResponseHeaders]):
             else:
                 query_string = request.query_string.decode("utf-8")
                 req_body = urllib.parse.unquote(query_string)
-            req_headers = request.headers
-            res_headers = Headers()
-            raw_response = s.handle_request(req_body, req_headers, res_headers)
+            req_meta = request.headers
+            raw_response = s.handle_request(req_body, req_meta)
             return Response(
                 raw_response.data,
                 status=raw_response.status_code,
                 content_type=raw_response.content_type,
-                headers=res_headers,
             )
     """
 
-    _impl: _ServiceImpl[RequestHeaders, ResponseHeaders]
+    _impl: _ServiceImpl[RequestMeta]
+    options: Final[ServiceOptions[RequestMeta]]
 
     def __init__(self):
-        self._impl = _ServiceImpl[RequestHeaders, ResponseHeaders]()
+        self._impl = _ServiceImpl[RequestMeta]()
+        self.options = ServiceOptions()
 
     def add_method(
         self,
         method: Method[Request, Response],
         impl: Union[
             Callable[[Request], Response],
-            Callable[[Request, RequestHeaders], Response],
-            Callable[[Request, RequestHeaders, ResponseHeaders], Response],
+            Callable[[Request, RequestMeta], Response],
         ],
-    ) -> None:
+    ) -> "Service[RequestMeta]":
         self._impl.add_method(method, impl)
+        return self
 
     def handle_request(
         self,
         req_body: str,
-        req_headers: RequestHeaders,
-        res_headers: ResponseHeaders,
+        req_meta: RequestMeta,
     ) -> RawServiceResponse:
-        return self._impl.handle_request(req_body, req_headers, res_headers)
+        return self._impl.handle_request(
+            req_body,
+            req_meta,
+            self.options,
+        )
 
 
-class ServiceAsync(Generic[RequestHeaders, ResponseHeaders]):
-    _impl: _ServiceImpl[RequestHeaders, ResponseHeaders]
+class ServiceAsync(Generic[RequestMeta]):
+    _impl: _ServiceImpl[RequestMeta]
+    options: Final[ServiceOptions[RequestMeta]]
 
     def __init__(self):
-        self._impl = _ServiceImpl[RequestHeaders, ResponseHeaders]()
+        self._impl = _ServiceImpl[RequestMeta]()
+        self.options = ServiceOptions()
 
     def add_method(
         self,
@@ -416,20 +624,22 @@ class ServiceAsync(Generic[RequestHeaders, ResponseHeaders]):
         impl: Union[
             # Sync
             Callable[[Request], Response],
-            Callable[[Request, RequestHeaders], Response],
-            Callable[[Request, RequestHeaders, ResponseHeaders], Response],
+            Callable[[Request, RequestMeta], Response],
             # Async
             Callable[[Request], Awaitable[Response]],
-            Callable[[Request, RequestHeaders], Awaitable[Response]],
-            Callable[[Request, RequestHeaders, ResponseHeaders], Awaitable[Response]],
+            Callable[[Request, RequestMeta], Awaitable[Response]],
         ],
-    ) -> None:
+    ) -> "ServiceAsync[RequestMeta]":
         self._impl.add_method(method, impl)
+        return self
 
     async def handle_request(
         self,
         req_body: str,
-        req_headers: RequestHeaders,
-        res_headers: ResponseHeaders,
+        req_meta: RequestMeta,
     ) -> RawServiceResponse:
-        return await self._impl.handle_request_async(req_body, req_headers, res_headers)
+        return await self._impl.handle_request_async(
+            req_body,
+            req_meta,
+            self.options,
+        )
