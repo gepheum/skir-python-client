@@ -150,8 +150,6 @@ class ServiceOptions(Generic[RequestMeta]):
     """Callback invoked whenever an error is thrown during method execution.
 
     Use this to log errors for monitoring, debugging, or alerting purposes.
-    The callback receives the error object, the method being executed, the
-    request that triggered the error, and the request metadata.
 
     Defaults to a function which logs the method name and error message using
     the logging module at ERROR level.
