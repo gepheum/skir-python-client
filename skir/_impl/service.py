@@ -12,7 +12,6 @@ from skir._impl.never import Never
 _logger = logging.getLogger(__name__)
 
 RequestMeta = TypeVar("RequestMeta")
-RequestMeta_contra = TypeVar("RequestMeta_contra", contravariant=True)
 
 
 # ==============================================================================
@@ -101,12 +100,9 @@ class ServiceError(Exception):
 
 
 @dataclass(frozen=True)
-class ServiceErrorContext(Generic[RequestMeta]):
-    """Context information about an error that occurred during method execution.
-
-    This dataclass is passed to the error_logger callback whenever an exception
-    is thrown during the handling of a service method call. It provides all the
-    information needed to log the error.
+class MethodErrorInfo(Generic[RequestMeta]):
+    """Information about an error thrown during the execution of a method on
+    the server side.
     """
 
     error: Exception
@@ -116,10 +112,10 @@ class ServiceErrorContext(Generic[RequestMeta]):
     """The method that was being executed when the error occurred."""
 
     request: Any
-    """The deserialized request object that was passed to the method."""
+    """Parsed request passed to the method's implementation."""
 
     request_meta: RequestMeta
-    """The request metadata (e.g., HTTP headers, authentication info)."""
+    """Metadata coming from the HTTP headers of the request."""
 
 
 class ServiceOptions(Generic[RequestMeta]):
@@ -131,25 +127,26 @@ class ServiceOptions(Generic[RequestMeta]):
     preserve this data and later define those IDs in a future schema version,
     the injected data could be deserialized as valid fields, leading to
     security vulnerabilities or data corruption.
-
-    Defaults to False.
     """
 
-    can_send_unknown_error_message: Union[
-        Literal[True, False], Callable[[RequestMeta], bool]
-    ] = False
-    """Predicate that determines whether the message of an unknown error (i.e. not
-    a ServiceError) should be sent to the client.
+    can_send_unknown_error_message: Union[bool, Callable[[MethodErrorInfo], bool]] = (
+        False
+    )
+    """Whether the message of an unknown error (i.e. not a ServiceError) can be
+    sent to the client in the response body, which can help with debugging.
 
     By default, unknown errors are masked and the client receives a generic
     'server error' message with status 500. This is to prevent leaking
     sensitive information to the client.
 
-    You can enable this for debugging purposes or if you are sure that your
-    error messages are safe to expose.
+    You can enable this if your server is internal or if you are sure that your
+    error messages are safe to expose. By passing a predicate instead of true
+    or false, you can control on a per-error basis whether to expose the error
+    message; for example, you can send error messages only if the user is an
+    admin.
     """
 
-    error_logger: Callable[[ServiceErrorContext[RequestMeta]], None]
+    error_logger: Callable[[MethodErrorInfo[RequestMeta]], None]
     """Callback invoked whenever an error is thrown during method execution.
 
     Use this to log errors for monitoring, debugging, or alerting purposes.
@@ -164,12 +161,12 @@ class ServiceOptions(Generic[RequestMeta]):
     """URL to the JavaScript file for the Skir Studio app.
 
     Skir Studio is a web interface for exploring and testing your Skir service.
-    It is served when the service receives a request at '${serviceUrl}?studio'.
+    It is served when the service receives a request at '{serviceUrl}?studio'.
     """
 
     def __init__(self):
         def _default_error_logger(
-            error_context: ServiceErrorContext[RequestMeta],
+            error_context: MethodErrorInfo[RequestMeta],
         ) -> None:
             method_name = error_context.method.name
             error = error_context.error
@@ -182,12 +179,12 @@ class ServiceOptions(Generic[RequestMeta]):
 
     def _resolve_can_send_unknown_error_message(
         self,
-        req_meta: RequestMeta,
+        error_info: MethodErrorInfo[Request],
     ) -> bool:
         if isinstance(self.can_send_unknown_error_message, bool):
             return self.can_send_unknown_error_message
         else:
-            return self.can_send_unknown_error_message(req_meta)
+            return self.can_send_unknown_error_message(error_info)
 
 
 # ==============================================================================
@@ -531,21 +528,19 @@ class _HandleRequestFlow(Generic[Request, Response, RequestMeta]):
         try:
             res = method_impl.impl(req, self.req_meta)
         except Exception as e:
-            error_context = ServiceErrorContext(
+            error_info = MethodErrorInfo(
                 error=e,
                 method=method_impl.method,
                 request=req,
                 request_meta=self.req_meta,
             )
-            self.options.error_logger(error_context)
+            self.options.error_logger(error_info)
             if isinstance(e, ServiceError):
                 return e.to_raw_response()
             else:
                 message = (
                     f"server error: {e}"
-                    if self.options._resolve_can_send_unknown_error_message(
-                        self.req_meta
-                    )
+                    if self.options._resolve_can_send_unknown_error_message(error_info)
                     else "server error"
                 )
                 return _make_server_error_response(message)
@@ -559,25 +554,23 @@ class _HandleRequestFlow(Generic[Request, Response, RequestMeta]):
             return req_impl_pair_or_raw_response
         req, method_impl = req_impl_pair_or_raw_response
         try:
-            res: Any = method_impl.impl(req, self.req_meta)
+            res: Any = method_impl.impl(req, cast(RequestMeta, self.req_meta))
             if inspect.isawaitable(res):
                 res = await res
         except Exception as e:
-            error_context = ServiceErrorContext(
+            error_info = MethodErrorInfo[RequestMeta](
                 error=e,
                 method=method_impl.method,
                 request=req,
                 request_meta=self.req_meta,
             )
-            self.options.error_logger(error_context)
+            self.options.error_logger(error_info)
             if isinstance(e, ServiceError):
                 return e.to_raw_response()
             else:
                 message = (
                     f"server error: {e}"
-                    if self.options._resolve_can_send_unknown_error_message(
-                        self.req_meta
-                    )
+                    if self.options._resolve_can_send_unknown_error_message(error_info)
                     else "server error"
                 )
                 return _make_server_error_response(message)

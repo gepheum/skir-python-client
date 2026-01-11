@@ -10,11 +10,11 @@ from skir._impl.serializers import (
     primitive_serializer,
 )
 from skir._impl.service import (
+    MethodErrorInfo,
     RawServiceResponse,
     Service,
     ServiceAsync,
     ServiceError,
-    ServiceErrorContext,
     ServiceOptions,
 )
 from skir._impl.service_client import ServiceClient
@@ -34,7 +34,7 @@ __all__ = [
     "ServiceAsync",
     "ServiceClient",
     "ServiceError",
-    "ServiceErrorContext",
+    "MethodErrorInfo",
     "ServiceOptions",
     "Timestamp",
     "array_serializer",
