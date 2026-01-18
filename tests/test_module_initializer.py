@@ -706,12 +706,12 @@ class ModuleInitializerTestCase(unittest.TestCase):
         module = self.init_test_module()
         primary_color_cls = module["PrimaryColor"]
         unknown = primary_color_cls.UNKNOWN
-        self.assertEqual(unknown.kind, "?")
+        self.assertEqual(unknown.kind, "UNKNOWN")
         self.assertEqual(unknown.value, None)
         self.assertIs(unknown.union, unknown)
         serializer = primary_color_cls.serializer
         self.assertEqual(serializer.to_json(unknown), 0)
-        self.assertEqual(serializer.to_json(unknown, readable=True), "?")
+        self.assertEqual(serializer.to_json(unknown, readable=True), "UNKNOWN")
         self.assertFalse(bool(unknown))
         self.assertTrue(bool(primary_color_cls.RED))
 
@@ -786,7 +786,9 @@ class ModuleInitializerTestCase(unittest.TestCase):
         status_cls = module["Status"]
         serializer = status_cls.serializer
         self.assertEqual(serializer.to_json(status_cls.UNKNOWN), 0)
-        self.assertEqual(serializer.to_json(status_cls.UNKNOWN, readable=True), "?")
+        self.assertEqual(
+            serializer.to_json(status_cls.UNKNOWN, readable=True), "UNKNOWN"
+        )
         self.assertEqual(serializer.to_json(status_cls.OK), 1)
         self.assertEqual(serializer.to_json(status_cls.OK, readable=True), "OK")
         self.assertEqual(serializer.to_json(status_cls.OK, readable=False), 1)
@@ -801,7 +803,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         status_cls = module["Status"]
         serializer = status_cls.serializer
         self.assertEqual(serializer.from_json(0), status_cls.UNKNOWN)
-        self.assertEqual(serializer.from_json("?"), status_cls.UNKNOWN)
+        self.assertEqual(serializer.from_json("UNKNOWN"), status_cls.UNKNOWN)
         self.assertEqual(serializer.from_json(1), status_cls.OK)
         self.assertEqual(serializer.from_json("OK"), status_cls.OK)
         self.assertEqual(serializer.from_json([2, "E"]), status_cls.wrap_error("E"))
@@ -861,7 +863,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                 {
                     "kind": "array",
                     "value": [
-                        "?",
+                        "UNKNOWN",
                         "NULL",
                         {"kind": "bool", "value": True},
                         {"kind": "number", "value": 3.14},
@@ -1175,7 +1177,9 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIsInstance(enum_wrappers, KeyedItems)
         self.assertIs(enum_wrappers.find("OK"), enum_wrappers[2])
         self.assertIs(enum_wrappers.find("error"), enum_wrappers[1])
-        self.assertIs(enum_wrappers.find_or_default("?"), enum_wrapper_cls.DEFAULT)
+        self.assertIs(
+            enum_wrappers.find_or_default("UNKNOWN"), enum_wrapper_cls.DEFAULT
+        )
         enum_wrappers = stuff.to_mutable().to_frozen().enum_wrappers
         self.assertIs(enum_wrappers.find("error"), enum_wrappers[1])
 
@@ -1964,7 +1968,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
 
         # Roundtrip should return UNKNOWN
         restored = PrimaryColor.serializer.from_bytes(unknown_bytes)
-        self.assertEqual(restored.kind, "?")
+        self.assertEqual(restored.kind, "UNKNOWN")
         self.assertEqual(restored, PrimaryColor.UNKNOWN)
 
     def test_enum_binary_complex_value_types(self):

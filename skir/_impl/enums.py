@@ -110,7 +110,7 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
     @property
     def all_constant_variants(self) -> list[_spec.ConstantVariant]:
         unknown_variant = _spec.ConstantVariant(
-            name="?",
+            name="UNKNOWN",
             number=0,
             _attribute="UNKNOWN",
         )
@@ -226,7 +226,7 @@ def _make_base_class(spec: _spec.Enum) -> type:
             return self
 
         def __bool__(self) -> bool:
-            return self.kind != "?"
+            return self.kind != "UNKNOWN"
 
         def __setattr__(self, name: str, value: Any):
             raise FrozenInstanceError(self.__class__.__qualname__)
@@ -285,13 +285,13 @@ def _make_unrecognized_class(base_class: type) -> type:
     class Unrecognized(base_class):
         __slots__ = ("_dj", "_bytes")
 
-        kind: Final[str] = "?"
+        kind: Final[str] = "UNKNOWN"
         _number: Final[int] = 0
         # dense JSON
         _dj: list[Any] | int
         _bytes: bytes
         # readable JSON
-        _rj: Final[str] = "?"
+        _rj: Final[str] = "UNKNOWN"
         # has value
         _hv: Final[bool] = False
 
