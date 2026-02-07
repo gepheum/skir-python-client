@@ -28,7 +28,6 @@ class ServiceClient:
         request: Request,
         headers: Mapping[str, str] = {},
         *,
-        res_headers: list[tuple[str, str]] | None = None,
         timeout_secs: float | None = None,
     ) -> Response:
         """Invokes the given method on the remote server through an RPC."""
@@ -62,9 +61,6 @@ class ServiceClient:
                 headers=headers,
             )
             response = conn.getresponse()
-            if res_headers is not None:
-                res_headers.clear()
-                res_headers.extend(response.getheaders())
             status_code = response.status
             content_type = response.getheader("Content-Type") or ""
             response_data = response.read().decode("utf-8", errors="ignore")
@@ -84,8 +80,6 @@ class ServiceClient:
         method: Method[Request, Response],
         request: Request,
         headers: Mapping[str, str] = {},
-        *,
-        res_headers: list[tuple[str, str]] | None = None,
     ) -> Response:
         """
         Asynchronously invokes the given method on the remote server through an RPC.
@@ -136,10 +130,6 @@ class ServiceClient:
             data=body,
             headers=request_headers,
         ) as response:
-            if res_headers is not None:
-                res_headers.clear()
-                res_headers.extend(response.headers.items())
-
             status_code = response.status
             content_type = response.headers.get("Content-Type", "")
             response_data = await response.text(encoding="utf-8", errors="ignore")
