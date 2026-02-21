@@ -581,10 +581,10 @@ class _HandleRequestFlow(Generic[Request, Response, RequestMeta]):
         tuple[Any, _MethodImpl[Request, Response, RequestMeta]],
         RawServiceResponse,
     ]:
-        if self.req_body in ("", "list"):
+        if self.req_body == "list":
             return self._handle_list()
 
-        if self.req_body == "studio":
+        if self.req_body in ("", "studio"):
             return self._handle_studio()
 
         # Method invokation
