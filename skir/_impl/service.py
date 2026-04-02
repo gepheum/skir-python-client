@@ -158,7 +158,7 @@ class ServiceOptions(Generic[RequestMeta]):
     studio_app_js_url: str
     """URL to the JavaScript file for the Skir Studio app.
 
-    Skir Studio is a web interface for exploring and testing your Skir service.
+    Skir Studio is a web interface for exploring and testing your SkirRPC service.
     It is served when the service receives a request at '{serviceUrl}?studio'.
     """
 
@@ -191,7 +191,7 @@ class ServiceOptions(Generic[RequestMeta]):
 
 
 class Service(Generic[RequestMeta]):
-    """Wraps around the implementation of a skir service on the server side.
+    """Wraps around the implementation of a SkirRPC service on the server side.
 
     Usage: call '.add_method()' to register method implementations, then call
     '.handle_request()' from the function called by your web framework when an
@@ -405,7 +405,7 @@ def _get_studio_html(studio_app_js_url: str) -> str:
   <head>
     <meta charset="utf-8" />
     <title>RPC Studio</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐙</text></svg>">
     <script src="{escaped_url}"></script>
   </head>
   <body style="margin: 0; padding: 0;">
