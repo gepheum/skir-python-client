@@ -469,6 +469,20 @@ def _make_from_json_fn(
     wrapper_variant_numbers = tuple(sorted(number_to_wrapper_variant.keys()))
     wrapper_variant_names = tuple(sorted(name_to_wrapper_variant.keys()))
 
+    # Build map from constant-variant number → ConstantWithPayload class,
+    # used for the wrapper→constant compat (list JSON read as constant).
+    number_to_payload_class: dict[int, type] = {}
+    for _variant in constant_variants:
+        if _variant.number != 0:
+            _constant_instance = getattr(base_class, _variant.attribute)
+            number_to_payload_class[_variant.number] = (
+                _make_constant_with_payload_class(type(_constant_instance))
+            )
+    number_to_payload_class_local = Expr.local("n2pc", number_to_payload_class)
+
+    # Sorted wrapper variants used to generate constant→wrapper default branches.
+    sorted_wrapper_variants = sorted(wrapper_variants, key=lambda wv: wv.spec.number)
+
     builder = BodyBuilder()
     # The reason why we wrap the function inside a 'while' is explained below.
     builder.append_ln("while True:")
@@ -477,12 +491,40 @@ def _make_from_json_fn(
     if len(constant_variants) == 1:
         builder.append_ln("  if json == 0:")
         builder.append_ln("    return ", unknown_constant_local)
+        # Handle non-UNKNOWN integers: constant→wrapper compat, and fix the
+        # existing infinite-loop bug for unrecognized non-zero integers.
+        builder.append_ln("  elif json.__class__ is int:")
+        for _i, _wv in enumerate(sorted_wrapper_variants):
+            _if_kw = "if" if _i == 0 else "elif"
+            _dcls_l = Expr.local("dcls?", _wv.value_class)
+            _dval = _wv.value_type.to_frozen_expr(_wv.value_type.default_expr())
+            builder.append_ln(f"    {_if_kw} json == {_wv.spec.number}:")
+            builder.append_ln("      ret = ", _dcls_l, "()")
+            builder.append_ln(
+                "      ", obj_setattr_local, '(ret, "value", ', _dval, ")"
+            )
+            builder.append_ln("      return ret")
+        _cond = f"json in {removed_numbers_tuple} or " if removed_numbers else ""
+        builder.append_ln(f"    if {_cond}not keep_unrecognized_values:")
+        builder.append_ln("      return ", unknown_constant_local)
+        builder.append_ln("    return ", unrecognized_class_local, "(json, b'\\0')")
     else:
         # `json.__class__ is int` is significantly faster than `isinstance(json, int)`
         builder.append_ln("  if json.__class__ is int:")
         builder.append_ln("    try:")
         builder.append_ln("      return ", key_to_constant_local, "[json]")
         builder.append_ln("    except:")
+        # Constant→wrapper compat: integer matches a wrapper variant number.
+        for _i, _wv in enumerate(sorted_wrapper_variants):
+            _if_kw = "if" if _i == 0 else "elif"
+            _dcls_l = Expr.local("dcls?", _wv.value_class)
+            _dval = _wv.value_type.to_frozen_expr(_wv.value_type.default_expr())
+            builder.append_ln(f"      {_if_kw} json == {_wv.spec.number}:")
+            builder.append_ln("        ret = ", _dcls_l, "()")
+            builder.append_ln(
+                "        ", obj_setattr_local, '(ret, "value", ', _dval, ")"
+            )
+            builder.append_ln("        return ret")
         if removed_numbers:
             builder.append_ln(
                 f"      if json in {removed_numbers_tuple} or not keep_unrecognized_values:"
@@ -518,6 +560,14 @@ def _make_from_json_fn(
     builder.append_ln("    number = json[0]")
     if not wrapper_variants:
         # The variant was either removed or is an unrecognized variant.
+        # Wrapper→constant compat: list matches a constant variant number.
+        if number_to_payload_class:
+            builder.append_ln("    if number in ", number_to_payload_class_local, ":")
+            builder.append_ln("      if not keep_unrecognized_values:")
+            builder.append_ln("        return ", key_to_constant_local, "[number]")
+            builder.append_ln(
+                "      return ", number_to_payload_class_local, "[number](json, None)"
+            )
         if removed_numbers:
             builder.append_ln(
                 f"    if number in {removed_numbers_tuple} or not keep_unrecognized_values:"
@@ -526,6 +576,14 @@ def _make_from_json_fn(
         builder.append_ln("    return ", unrecognized_class_local, "(json, b'\\0')")
     else:
         builder.append_ln(f"    if number not in {wrapper_variant_numbers}:")
+        # Wrapper→constant compat: list number matches a constant variant.
+        if number_to_payload_class:
+            builder.append_ln("      if number in ", number_to_payload_class_local, ":")
+            builder.append_ln("        if not keep_unrecognized_values:")
+            builder.append_ln("          return ", key_to_constant_local, "[number]")
+            builder.append_ln(
+                "        return ", number_to_payload_class_local, "[number](json, None)"
+            )
         if removed_numbers:
             builder.append_ln(
                 f"      if number in {removed_numbers_tuple} or not keep_unrecognized_values:"
@@ -618,6 +676,20 @@ def _make_decode_fn(
         number_to_wrapper_variant[variant.spec.number] = variant
     wrapper_variant_numbers = tuple(sorted(number_to_wrapper_variant.keys()))
 
+    # Build map from constant-variant number → ConstantWithPayload class,
+    # used for the wrapper→constant compat (binary read as constant).
+    number_to_payload_class: dict[int, type] = {}
+    for _variant in constant_variants:
+        if _variant.number != 0:
+            _constant_instance = getattr(base_class, _variant.attribute)
+            number_to_payload_class[_variant.number] = (
+                _make_constant_with_payload_class(type(_constant_instance))
+            )
+    number_to_payload_class_local = Expr.local("n2pc", number_to_payload_class)
+
+    # Sorted wrapper variants for constant→wrapper default branches.
+    sorted_wrapper_variants = sorted(wrapper_variants, key=lambda wv: wv.spec.number)
+
     builder = BodyBuilder()
     builder.append_ln("start_offset = stream.position")
     builder.append_ln("wire = stream.buffer[start_offset]")
@@ -633,6 +705,15 @@ def _make_decode_fn(
     builder.append_ln("  try:")
     builder.append_ln("    return ", number_to_constant_local, "[number]")
     builder.append_ln("  except:")
+    # Constant→wrapper compat: constant-format number matches a wrapper variant.
+    for _i, _wv in enumerate(sorted_wrapper_variants):
+        _if_kw = "if" if _i == 0 else "elif"
+        _dcls_l = Expr.local("dcls?", _wv.value_class)
+        _dval = _wv.value_type.to_frozen_expr(_wv.value_type.default_expr())
+        builder.append_ln(f"    {_if_kw} number == {_wv.spec.number}:")
+        builder.append_ln("      ret = ", _dcls_l, "()")
+        builder.append_ln("      ", obj_setattr_local, '(ret, "value", ', _dval, ")")
+        builder.append_ln("      return ret")
     if removed_numbers:
         builder.append_ln(
             f"    if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
@@ -674,6 +755,15 @@ def _make_decode_fn(
     if not wrapper_variants:
         # The variant was either removed or is an unrecognized variant.
         builder.append_ln(Expr.local("decode_unused", decode_unused), "(stream)")
+        # Wrapper→constant compat: wrapper-format number matches a constant variant.
+        if number_to_payload_class:
+            builder.append_ln("if number in ", number_to_payload_class_local, ":")
+            builder.append_ln("  if not stream.keep_unrecognized_values:")
+            builder.append_ln("    return ", number_to_constant_local, "[number]")
+            builder.append_ln("  bytes = stream.buffer[start_offset:stream.position]")
+            builder.append_ln(
+                "  return ", number_to_payload_class_local, "[number](number, bytes)"
+            )
         if removed_numbers:
             builder.append_ln(
                 f"if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
@@ -684,6 +774,15 @@ def _make_decode_fn(
     else:
         builder.append_ln(f"if number not in {wrapper_variant_numbers}:")
         builder.append_ln("  ", Expr.local("decode_unused", decode_unused), "(stream)")
+        # Wrapper→constant compat: wrapper-format number matches a constant variant.
+        if number_to_payload_class:
+            builder.append_ln("  if number in ", number_to_payload_class_local, ":")
+            builder.append_ln("    if not stream.keep_unrecognized_values:")
+            builder.append_ln("      return ", number_to_constant_local, "[number]")
+            builder.append_ln("    bytes = stream.buffer[start_offset:stream.position]")
+            builder.append_ln(
+                "    return ", number_to_payload_class_local, "[number](number, bytes)"
+            )
         if removed_numbers:
             builder.append_ln(
                 f"  if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
@@ -704,3 +803,25 @@ def _name_private_is_enum_attr(record_id: str) -> str:
     record_name = _spec.RecordId.parse(record_id).name
     hex_hash = hex(abs(hash(record_id)))[:6]
     return f"_is_{record_name}_{hex_hash}"
+
+
+def _make_constant_with_payload_class(constant_class: type) -> type:
+    """Creates a subclass of a constant class that stores the original wrapper payload.
+
+    When a constant variant's number is encountered in wrapper-variant format
+    (e.g. [number, value] in JSON or wrapper bytes), this class preserves the
+    original payload to enable round-tripping through the constant schema.
+    """
+    precomputed_bytes = constant_class._bytes  # type: ignore[attr-defined]
+
+    class ConstantWithPayload(constant_class):
+        __slots__ = ("_dj", "_bytes")
+
+        def __init__(self, dj: Any, raw_bytes: bytes | None):
+            object.__setattr__(self, "value", None)
+            object.__setattr__(self, "_dj", copy.deepcopy(dj))
+            object.__setattr__(
+                self, "_bytes", raw_bytes if raw_bytes else precomputed_bytes
+            )
+
+    return ConstantWithPayload
