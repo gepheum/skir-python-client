@@ -491,8 +491,7 @@ def _make_from_json_fn(
     if len(constant_variants) == 1:
         builder.append_ln("  if json == 0:")
         builder.append_ln("    return ", unknown_constant_local)
-        # Handle non-UNKNOWN integers: constant→wrapper compat, and fix the
-        # existing infinite-loop bug for unrecognized non-zero integers.
+        # Handle non-UNKNOWN integers: constant→wrapper compat
         builder.append_ln("  elif json.__class__ is int:")
         for _i, _wv in enumerate(sorted_wrapper_variants):
             _if_kw = "if" if _i == 0 else "elif"
@@ -594,7 +593,7 @@ def _make_from_json_fn(
 
     # READABLE FORMAT
     if len(constant_variants) == 1:
-        builder.append_ln("  elif json == '?':")
+        builder.append_ln("  elif json == 'UNKNOWN':")
         builder.append_ln("    return ", unknown_constant_local)
     else:
         builder.append_ln("  if isinstance(json, str):")
@@ -643,7 +642,7 @@ def _make_from_json_fn(
     builder.append_ln("  elif isinstance(json, list):")
     builder.append_ln("    json = list(json)")
     builder.append_ln("  else:")
-    builder.append_ln("    return TypeError()")
+    builder.append_ln("    raise TypeError()")
 
     return make_function(
         name="from_json",
