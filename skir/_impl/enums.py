@@ -469,17 +469,6 @@ def _make_from_json_fn(
     wrapper_variant_numbers = tuple(sorted(number_to_wrapper_variant.keys()))
     wrapper_variant_names = tuple(sorted(name_to_wrapper_variant.keys()))
 
-    # Build map from constant-variant number → ConstantWithPayload class,
-    # used for the wrapper→constant compat (list JSON read as constant).
-    number_to_payload_class: dict[int, type] = {}
-    for _variant in constant_variants:
-        if _variant.number != 0:
-            _constant_instance = getattr(base_class, _variant.attribute)
-            number_to_payload_class[_variant.number] = (
-                _make_constant_with_payload_class(type(_constant_instance))
-            )
-    number_to_payload_class_local = Expr.local("n2pc", number_to_payload_class)
-
     # Sorted wrapper variants used to generate constant→wrapper default branches.
     sorted_wrapper_variants = sorted(wrapper_variants, key=lambda wv: wv.spec.number)
 
@@ -560,13 +549,8 @@ def _make_from_json_fn(
     if not wrapper_variants:
         # The variant was either removed or is an unrecognized variant.
         # Wrapper→constant compat: list matches a constant variant number.
-        if number_to_payload_class:
-            builder.append_ln("    if number in ", number_to_payload_class_local, ":")
-            builder.append_ln("      if not keep_unrecognized_values:")
-            builder.append_ln("        return ", key_to_constant_local, "[number]")
-            builder.append_ln(
-                "      return ", number_to_payload_class_local, "[number](json, None)"
-            )
+        builder.append_ln("    if number in ", key_to_constant_local, ":")
+        builder.append_ln("      return ", key_to_constant_local, "[number]")
         if removed_numbers:
             builder.append_ln(
                 f"    if number in {removed_numbers_tuple} or not keep_unrecognized_values:"
@@ -576,13 +560,8 @@ def _make_from_json_fn(
     else:
         builder.append_ln(f"    if number not in {wrapper_variant_numbers}:")
         # Wrapper→constant compat: list number matches a constant variant.
-        if number_to_payload_class:
-            builder.append_ln("      if number in ", number_to_payload_class_local, ":")
-            builder.append_ln("        if not keep_unrecognized_values:")
-            builder.append_ln("          return ", key_to_constant_local, "[number]")
-            builder.append_ln(
-                "        return ", number_to_payload_class_local, "[number](json, None)"
-            )
+        builder.append_ln("      if number in ", key_to_constant_local, ":")
+        builder.append_ln("        return ", key_to_constant_local, "[number]")
         if removed_numbers:
             builder.append_ln(
                 f"      if number in {removed_numbers_tuple} or not keep_unrecognized_values:"
@@ -675,17 +654,6 @@ def _make_decode_fn(
         number_to_wrapper_variant[variant.spec.number] = variant
     wrapper_variant_numbers = tuple(sorted(number_to_wrapper_variant.keys()))
 
-    # Build map from constant-variant number → ConstantWithPayload class,
-    # used for the wrapper→constant compat (binary read as constant).
-    number_to_payload_class: dict[int, type] = {}
-    for _variant in constant_variants:
-        if _variant.number != 0:
-            _constant_instance = getattr(base_class, _variant.attribute)
-            number_to_payload_class[_variant.number] = (
-                _make_constant_with_payload_class(type(_constant_instance))
-            )
-    number_to_payload_class_local = Expr.local("n2pc", number_to_payload_class)
-
     # Sorted wrapper variants for constant→wrapper default branches.
     sorted_wrapper_variants = sorted(wrapper_variants, key=lambda wv: wv.spec.number)
 
@@ -755,14 +723,8 @@ def _make_decode_fn(
         # The variant was either removed or is an unrecognized variant.
         builder.append_ln(Expr.local("decode_unused", decode_unused), "(stream)")
         # Wrapper→constant compat: wrapper-format number matches a constant variant.
-        if number_to_payload_class:
-            builder.append_ln("if number in ", number_to_payload_class_local, ":")
-            builder.append_ln("  if not stream.keep_unrecognized_values:")
-            builder.append_ln("    return ", number_to_constant_local, "[number]")
-            builder.append_ln("  bytes = stream.buffer[start_offset:stream.position]")
-            builder.append_ln(
-                "  return ", number_to_payload_class_local, "[number](number, bytes)"
-            )
+        builder.append_ln("if number in ", number_to_constant_local, ":")
+        builder.append_ln("  return ", number_to_constant_local, "[number]")
         if removed_numbers:
             builder.append_ln(
                 f"if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
@@ -774,14 +736,8 @@ def _make_decode_fn(
         builder.append_ln(f"if number not in {wrapper_variant_numbers}:")
         builder.append_ln("  ", Expr.local("decode_unused", decode_unused), "(stream)")
         # Wrapper→constant compat: wrapper-format number matches a constant variant.
-        if number_to_payload_class:
-            builder.append_ln("  if number in ", number_to_payload_class_local, ":")
-            builder.append_ln("    if not stream.keep_unrecognized_values:")
-            builder.append_ln("      return ", number_to_constant_local, "[number]")
-            builder.append_ln("    bytes = stream.buffer[start_offset:stream.position]")
-            builder.append_ln(
-                "    return ", number_to_payload_class_local, "[number](number, bytes)"
-            )
+        builder.append_ln("  if number in ", number_to_constant_local, ":")
+        builder.append_ln("    return ", number_to_constant_local, "[number]")
         if removed_numbers:
             builder.append_ln(
                 f"  if number in {removed_numbers_tuple} or not stream.keep_unrecognized_values:"
@@ -802,25 +758,3 @@ def _name_private_is_enum_attr(record_id: str) -> str:
     record_name = _spec.RecordId.parse(record_id).name
     hex_hash = hex(abs(hash(record_id)))[:6]
     return f"_is_{record_name}_{hex_hash}"
-
-
-def _make_constant_with_payload_class(constant_class: type) -> type:
-    """Creates a subclass of a constant class that stores the original wrapper payload.
-
-    When a constant variant's number is encountered in wrapper-variant format
-    (e.g. [number, value] in JSON or wrapper bytes), this class preserves the
-    original payload to enable round-tripping through the constant schema.
-    """
-    precomputed_bytes = constant_class._bytes  # type: ignore[attr-defined]
-
-    class ConstantWithPayload(constant_class):
-        __slots__ = ("_dj", "_bytes")
-
-        def __init__(self, dj: Any, raw_bytes: bytes | None):
-            object.__setattr__(self, "value", None)
-            object.__setattr__(self, "_dj", copy.deepcopy(dj))
-            object.__setattr__(
-                self, "_bytes", raw_bytes if raw_bytes else precomputed_bytes
-            )
-
-    return ConstantWithPayload
