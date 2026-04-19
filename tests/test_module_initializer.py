@@ -2219,3 +2219,101 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertEqual(nested.value.entries[0].name, "inner")
         self.assertEqual(nested.value.entries[0].value.kind, "string")
         self.assertEqual(nested.value.entries[0].value.value, "deep value")
+
+
+class EnumNameCaseCompatibilityTestCase(unittest.TestCase):
+    """Tests that enum constant names are recognised in both UPPER_CASE and
+    lower_case regardless of how the code generator spelled them.
+
+    Condition 1 - serialisation: the lower_case name (as registered by the new
+    generator) is used when emitting readable JSON.
+
+    Condition 2 - parsing: both the registered name *and* its opposite casing
+    are accepted when reading readable JSON, so that payloads from old
+    (UPPER_CASE) serialisers remain usable after a generator upgrade.
+    """
+
+    def _make_module(self):
+        """Create a small test module with lower_case-named enum variants."""
+        from skir._module_initializer import init_module
+
+        module: dict = {}
+        init_module(
+            records=(
+                _spec.Enum(
+                    id="test.skir:Color",
+                    doc="",
+                    constant_variants=(
+                        _spec.ConstantVariant(name="red", number=1),
+                        _spec.ConstantVariant(name="green", number=2),
+                        _spec.ConstantVariant(name="blue", number=3),
+                    ),
+                ),
+                _spec.Enum(
+                    id="test.skir:Status",
+                    doc="",
+                    constant_variants=(),
+                    wrapper_variants=(
+                        _spec.WrapperVariant(
+                            name="pending",
+                            number=1,
+                            type=_spec.PrimitiveType.STRING,
+                        ),
+                        _spec.WrapperVariant(
+                            name="error",
+                            number=2,
+                            type=_spec.PrimitiveType.INT32,
+                        ),
+                    ),
+                ),
+            ),
+            methods=(),
+            constants=(),
+            globals=module,
+            record_id_to_adapter={},
+        )
+        return module
+
+    # ── Condition 1: serialise using the registered (lower_case) name ─────────
+
+    def test_serialises_lowercase_constant_to_lower_case_readable_json(self):
+        module = self._make_module()
+        Color = module["Color"]
+        serializer = Color.serializer
+        self.assertEqual(serializer.to_json(Color.red, readable=True), "red")
+        self.assertEqual(serializer.to_json(Color.green, readable=True), "green")
+        self.assertEqual(serializer.to_json(Color.blue, readable=True), "blue")
+
+    def test_serialises_lowercase_wrapper_to_lower_case_kind_in_readable_json(self):
+        module = self._make_module()
+        Status = module["Status"]
+        serializer = Status.serializer
+        pending = Status.wrap_pending("waiting")
+        result = serializer.to_json(pending, readable=True)
+        self.assertEqual(result, {"kind": "pending", "value": "waiting"})
+
+    # ── Condition 2: parse both UPPER_CASE and lower_case names ───────────────
+
+    def test_parses_upper_case_constant_name(self):
+        module = self._make_module()
+        Color = module["Color"]
+        serializer = Color.serializer
+        # Simulate JSON from an old serializer that used UPPER_CASE names.
+        result = serializer.from_json("RED")
+        self.assertEqual(result, Color.red)
+
+    def test_parses_lower_case_constant_name(self):
+        module = self._make_module()
+        Color = module["Color"]
+        serializer = Color.serializer
+        result = serializer.from_json("green")
+        self.assertEqual(result, Color.green)
+
+    def test_upper_case_and_lower_case_constant_names_yield_same_result(self):
+        module = self._make_module()
+        Color = module["Color"]
+        serializer = Color.serializer
+        from_upper = serializer.from_json("BLUE")
+        from_lower = serializer.from_json("blue")
+        self.assertEqual(from_upper, from_lower)
+        self.assertEqual(from_upper, Color.blue)

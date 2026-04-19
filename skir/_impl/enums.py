@@ -457,6 +457,15 @@ def _make_from_json_fn(
         constant = getattr(base_class, variant.attribute)
         key_to_constant[variant.number] = constant
         key_to_constant[variant.name] = constant
+        # Register case aliases so that both UPPER_CASE and lower_case names are
+        # accepted when parsing readable JSON.
+        name_upper = variant.name.upper()
+        if name_upper != variant.name:
+            key_to_constant[name_upper] = constant
+        del name_upper
+        name_lower = variant.name.lower()
+        if name_lower != variant.name:
+            key_to_constant[name_lower] = constant
     key_to_constant_local = Expr.local("key_to_constant", key_to_constant)
     unknown_constant = key_to_constant[0]
     unknown_constant_local = Expr.local("unknown_constant", unknown_constant)
