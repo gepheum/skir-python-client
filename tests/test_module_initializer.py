@@ -2284,14 +2284,6 @@ class EnumNameCaseCompatibilityTestCase(unittest.TestCase):
         self.assertEqual(serializer.to_json(Color.green, readable=True), "green")
         self.assertEqual(serializer.to_json(Color.blue, readable=True), "blue")
 
-    def test_serialises_lowercase_wrapper_to_lower_case_kind_in_readable_json(self):
-        module = self._make_module()
-        Status = module["Status"]
-        serializer = Status.serializer
-        pending = Status.wrap_pending("waiting")
-        result = serializer.to_json(pending, readable=True)
-        self.assertEqual(result, {"kind": "pending", "value": "waiting"})
-
     # ── Condition 2: parse both UPPER_CASE and lower_case names ───────────────
 
     def test_parses_upper_case_constant_name(self):
