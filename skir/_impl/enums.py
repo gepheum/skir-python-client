@@ -251,9 +251,7 @@ def _make_base_class(spec: _spec.Enum) -> type:
 def _make_constant_class(base_class: type, spec: _spec.ConstantVariant) -> type:
     byte_array = bytearray()
     encode_int64(spec.number, byte_array)
-    readable_json_name = (
-        "unknown" if spec.number == 0 and spec.name == "UNKNOWN" else spec.name
-    )
+    readable_json_name = spec.name.lower()
 
     class Constant(base_class):
         __slots__ = ()

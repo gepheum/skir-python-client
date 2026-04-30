@@ -724,7 +724,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(red.union, red)
         serializer = primary_color_cls.serializer
         self.assertEqual(serializer.to_json(red), 10)
-        self.assertEqual(serializer.to_json(red, readable=True), "RED")
+        self.assertEqual(serializer.to_json(red, readable=True), "red")
 
     def test_enum_wrap(self):
         module = self.init_test_module()
@@ -790,7 +790,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
             serializer.to_json(status_cls.UNKNOWN, readable=True), "unknown"
         )
         self.assertEqual(serializer.to_json(status_cls.OK), 1)
-        self.assertEqual(serializer.to_json(status_cls.OK, readable=True), "OK")
+        self.assertEqual(serializer.to_json(status_cls.OK, readable=True), "ok")
         self.assertEqual(serializer.to_json(status_cls.OK, readable=False), 1)
         self.assertEqual(serializer.to_json(status_cls.wrap_error("E")), [2, "E"])
         self.assertEqual(
