@@ -183,7 +183,7 @@ class EnumAdapter(Generic[T], TypeAdapter[T]):
             doc=self.spec.doc,
             variants=tuple(
                 reflection.Variant(
-                    name=variant.name,
+                    name=variant.name.lower(),
                     number=variant.number,
                     type=None,
                     doc=variant.doc,

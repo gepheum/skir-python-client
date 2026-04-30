@@ -1269,7 +1269,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
                         "doc": "A JSON value.",
                         "variants": [
                             {
-                                "name": "NULL",
+                                "name": "null",
                                 "number": 1,
                             },
                             {
