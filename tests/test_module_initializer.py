@@ -711,7 +711,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         self.assertIs(unknown.union, unknown)
         serializer = primary_color_cls.serializer
         self.assertEqual(serializer.to_json(unknown), 0)
-        self.assertEqual(serializer.to_json(unknown, readable=True), "UNKNOWN")
+        self.assertEqual(serializer.to_json(unknown, readable=True), "unknown")
         self.assertFalse(bool(unknown))
         self.assertTrue(bool(primary_color_cls.RED))
 
@@ -787,7 +787,7 @@ class ModuleInitializerTestCase(unittest.TestCase):
         serializer = status_cls.serializer
         self.assertEqual(serializer.to_json(status_cls.UNKNOWN), 0)
         self.assertEqual(
-            serializer.to_json(status_cls.UNKNOWN, readable=True), "UNKNOWN"
+            serializer.to_json(status_cls.UNKNOWN, readable=True), "unknown"
         )
         self.assertEqual(serializer.to_json(status_cls.OK), 1)
         self.assertEqual(serializer.to_json(status_cls.OK, readable=True), "OK")

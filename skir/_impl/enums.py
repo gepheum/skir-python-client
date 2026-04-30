@@ -251,6 +251,9 @@ def _make_base_class(spec: _spec.Enum) -> type:
 def _make_constant_class(base_class: type, spec: _spec.ConstantVariant) -> type:
     byte_array = bytearray()
     encode_int64(spec.number, byte_array)
+    readable_json_name = (
+        "unknown" if spec.number == 0 and spec.name == "UNKNOWN" else spec.name
+    )
 
     class Constant(base_class):
         __slots__ = ()
@@ -260,7 +263,7 @@ def _make_constant_class(base_class: type, spec: _spec.ConstantVariant) -> type:
         # dense JSON
         _dj: Final[int] = spec.number
         # readable JSON
-        _rj: Final[str] = spec.name
+        _rj: Final[str] = readable_json_name
         # has value
         _hv: Final[bool] = False
         _bytes: Final[bytes | None] = bytes(byte_array)
@@ -291,7 +294,7 @@ def _make_unrecognized_class(base_class: type) -> type:
         _dj: list[Any] | int
         _bytes: bytes
         # readable JSON
-        _rj: Final[str] = "UNKNOWN"
+        _rj: Final[str] = "unknown"
         # has value
         _hv: Final[bool] = False
 
@@ -581,7 +584,7 @@ def _make_from_json_fn(
 
     # READABLE FORMAT
     if len(constant_variants) == 1:
-        builder.append_ln("  elif json == 'UNKNOWN':")
+        builder.append_ln("  elif json == 'UNKNOWN' or json == 'unknown':")
         builder.append_ln("    return ", unknown_constant_local)
     else:
         builder.append_ln("  if isinstance(json, str):")
