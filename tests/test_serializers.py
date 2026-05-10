@@ -327,6 +327,18 @@ class BinarySerializationTestCase(unittest.TestCase):
                 restored = primitive_serializer("string").from_bytes(result_bytes)
                 self.assertEqual(restored, value)
 
+    def test_string_binary_decode_replaces_malformed_utf8(self):
+        """Malformed UTF-8 byte sequences are replaced instead of raising."""
+        invalid_bytes = bytes.fromhex("736b6972f302ff7a")
+        restored = primitive_serializer("string").from_bytes(invalid_bytes)
+        self.assertEqual(restored, "\ufffdz")
+
+    def test_string_binary_encode_sanitizes_lone_surrogates(self):
+        """Lone surrogates are sanitized to valid UTF-8 during encoding."""
+        result_bytes = primitive_serializer("string").to_bytes("\ud800z")
+        restored = primitive_serializer("string").from_bytes(result_bytes)
+        self.assertEqual(restored, "?z")
+
     def test_bytes_binary_serialization(self):
         """Test bytes binary roundtrip."""
         values = [

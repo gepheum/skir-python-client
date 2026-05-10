@@ -418,7 +418,7 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
             buffer.append(242)
         else:
             buffer.append(243)
-            bytes_data = value.encode("utf-8")
+            bytes_data = value.encode("utf-8", errors="replace")
             length = len(bytes_data)
             encode_length_prefix(length, buffer)
             buffer.extend(bytes_data)
@@ -435,7 +435,7 @@ class _StringAdapter(AbstractPrimitiveAdapter[str]):
             # Should be wire 243
             length = decode_int64(stream)
             bytes_data = stream.read(length)
-            return bytes_data.decode("utf-8")
+            return bytes_data.decode("utf-8", errors="replace")
 
     def decode_fn(self) -> Callable[[ByteStream], str]:
         return _StringAdapter.decode
